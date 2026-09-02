@@ -1,0 +1,1265 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>孫子の兵法ノベルゲーム</title>
+<style>
+  :root{
+    --vh: 1vh;
+    --bg:#1b1512; --bg2:#241b16; --panel:#2c211b; --accent:#c9a24b; --accent2:#8a2b2b;
+    --text:#f0e6d2; --text-dim:#b8a98d; --bad:#5a1c1c; --good:#2f4a2f;
+    --paper:#efe6cf;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
+    font-family:"Hiragino Mincho ProN","Yu Mincho","Hiragino Sans",serif;height:100%;}
+  #app{position:relative;width:100%;height:calc(var(--vh, 1vh) * 100);overflow:hidden;
+    display:flex;flex-direction:column;
+    background:radial-gradient(ellipse at top, #2c2018 0%, #171310 70%);}
+
+  /* 背景レイヤー */
+  #bgLayer{position:absolute;inset:0;z-index:0;background-size:cover;background-position:center;
+    transition:background-image .6s ease, opacity .6s ease;opacity:.55;}
+  #bgLayer.none{opacity:0;}
+  #bgDim{position:absolute;inset:0;z-index:1;background:linear-gradient(to bottom, rgba(20,15,10,.35) 0%, rgba(20,15,10,.75) 70%, rgba(15,11,8,.92) 100%);}
+
+  /* 立ち絵レイヤー */
+  #spriteLayer{position:absolute;left:0;right:0;bottom:180px;z-index:2;display:flex;justify-content:center;
+    pointer-events:none;transition:opacity .25s ease;}
+  #spriteLayer img{max-height:38vh;max-width:70%;filter:drop-shadow(0 8px 16px rgba(0,0,0,.6));}
+  #spriteLayer .placeholder{width:120px;height:120px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;font-size:2.2rem;color:#1b1512;font-weight:bold;
+    border:3px solid var(--accent);margin-bottom:40px;}
+
+  #topbar{position:relative;z-index:5;display:flex;justify-content:space-between;align-items:center;
+    padding:8px 12px;background:linear-gradient(#241b16,#1b1512);
+    border-bottom:2px solid var(--accent);flex:0 0 auto;box-shadow:0 2px 8px rgba(0,0,0,.5);}
+  #topbar .title{font-size:0.85rem;color:var(--accent);letter-spacing:1px;}
+  #topbar button{background:linear-gradient(#3a2c20,#241b16);border:1px solid var(--accent);
+    color:var(--text);border-radius:4px;padding:6px 10px;font-size:0.75rem;margin-left:4px;}
+  #stage{position:relative;z-index:3;flex:1 1 auto;overflow-y:auto;padding:18px;
+    transition:background-color .5s, filter .5s;
+    display:flex;flex-direction:column;justify-content:flex-end;}
+  #stage.badend{background-color:rgba(42,15,15,.55);filter:brightness(.85) saturate(1.3);}
+  #stageInner{background:linear-gradient(180deg, rgba(28,20,14,0) 0%, rgba(20,15,11,.88) 22%, rgba(20,15,11,.94) 100%);
+    border-radius:8px;padding:14px 16px 6px;}
+  .line{margin-bottom:16px;line-height:1.8;font-size:1rem;animation:fadein .3s ease;}
+  @keyframes fadein{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+  .line .speaker{display:inline-block;font-weight:bold;color:var(--accent);margin-bottom:3px;
+    font-size:0.85rem;border-bottom:1px dotted var(--accent);padding-bottom:1px;}
+  .line.narrator{color:#dccfa0;}
+  .line.chiku .speaker{color:#8fc1a8;}
+  .line.quote{color:var(--paper);background:rgba(201,162,75,.1);border-left:4px solid var(--accent);
+    padding:10px 12px;margin:18px 0;font-size:1.05rem;border-radius:2px;}
+  .line.system{color:#9fc3e8;font-size:0.9rem;}
+  .wait-indicator{display:inline-block;margin-left:6px;color:var(--accent);
+    animation:bob 1.4s ease-in-out infinite;}
+  @keyframes bob{0%,100%{transform:translateY(0);opacity:.5;}50%{transform:translateY(4px);opacity:1;}}
+  #choices{display:flex;flex-direction:column;gap:8px;margin-top:12px;}
+  #choices button{padding:13px;border-radius:6px;border:1px solid var(--accent);
+    background:linear-gradient(#2c211b,#1e1712);color:var(--text);font-size:0.95rem;text-align:left;}
+  #choices button:active{background:#3a2c20;}
+  #nextBtn{margin-top:12px;padding:13px;border-radius:6px;border:1px solid var(--accent);
+    background:linear-gradient(#c9a24b,#a3813a);color:#1b1512;font-weight:bold;width:100%;font-size:1rem;
+    box-shadow:0 2px 6px rgba(0,0,0,.4);}
+  #explain{background:rgba(30,50,70,.4);border:1px solid #4a6a8a;border-radius:6px;padding:10px;
+    margin-top:10px;font-size:0.9rem;color:#cfe3ff;}
+  #panel-overlay{position:absolute;inset:0;background:rgba(0,0,0,.88);display:none;z-index:20;overflow-y:auto;}
+  #panel-overlay.show{display:block;}
+  #panel-inner{background:var(--bg2);margin:16px auto;max-width:520px;border-radius:8px;
+    padding:16px;min-height:60%;border:1px solid var(--accent);}
+  #panel-inner h2{margin-top:0;color:var(--accent);font-size:1.1rem;border-bottom:1px solid #444;padding-bottom:8px;}
+  .tabbar{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;}
+  .tabbar button{flex:1;padding:8px;border-radius:4px;border:1px solid #555;background:#171310;color:#ddd;font-size:0.8rem;}
+  .tabbar button.active{background:var(--accent);color:#1b1512;font-weight:bold;border-color:var(--accent);}
+  .entry{border-bottom:1px solid #3a2c20;padding:10px 4px;cursor:pointer;}
+  .entry b{color:var(--accent);}
+  .entry .brief{color:var(--text-dim);font-size:0.85rem;margin-top:2px;}
+  .entry-detail{background:#1e1712;border:1px solid var(--accent);border-radius:6px;padding:12px;margin-top:8px;font-size:0.9rem;}
+  .closeBtn{position:sticky;top:0;float:right;background:none;border:1px solid #666;
+    color:#eee;border-radius:4px;padding:4px 10px;}
+  .sceneItem{padding:10px;border-radius:4px;margin-bottom:6px;font-size:0.9rem;}
+  .sceneItem.read{background:#2a3a2a;color:#dfffdf;}
+  .sceneItem.unread{background:#1a1a1a;color:#555;}
+  .titlecard{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    background-size:cover;background-position:center;z-index:15;animation:fadein .6s ease;}
+  .titlecard .tc-dim{position:absolute;inset:0;background:rgba(10,7,5,.55);}
+  .titlecard .tc-content{position:relative;z-index:1;}
+  .titlecard .tc-text{color:var(--accent);font-size:1.4rem;text-align:center;letter-spacing:2px;
+    border-top:2px solid var(--accent);border-bottom:2px solid var(--accent);padding:18px 24px;
+    text-shadow:0 2px 6px rgba(0,0,0,.8);}
+  .titlecard .tc-sub{color:var(--paper);font-size:0.85rem;margin-top:8px;text-align:center;text-shadow:0 2px 6px rgba(0,0,0,.8);}
+  .introcard{background:linear-gradient(#241b16,#1b1512);border:2px solid var(--accent);border-radius:10px;
+    padding:20px;text-align:center;margin:10px 0;}
+  .introcard .portrait-img{max-width:70%;max-height:220px;margin:0 auto 12px;display:block;
+    filter:drop-shadow(0 6px 12px rgba(0,0,0,.5));}
+  .introcard .portrait{width:110px;height:110px;border-radius:50%;margin:0 auto 12px;
+    display:flex;align-items:center;justify-content:center;font-size:2rem;color:#1b1512;font-weight:bold;
+    border:3px solid var(--accent);}
+  .introcard .name{font-size:1.15rem;color:var(--accent);margin-bottom:6px;}
+  .introcard .tags{font-size:0.75rem;color:var(--text-dim);margin:8px 0;}
+  .introcard .desc{font-size:0.9rem;line-height:1.7;text-align:left;}
+  .diagram{background:rgba(0,0,0,.35);border:1px solid #4a3a28;border-radius:8px;padding:14px;margin:14px 0;}
+  .diagram .dtitle{font-size:0.8rem;color:var(--accent);margin-bottom:10px;}
+  .bar-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:0.85rem;}
+  .bar-row .label{width:80px;flex:0 0 auto;color:var(--text-dim);}
+  .bar-row .bar-bg{flex:1;background:#111;border-radius:4px;overflow:hidden;height:16px;}
+  .bar-row .bar-fill{height:100%;background:linear-gradient(90deg,var(--accent),#a3813a);transition:width .8s ease;}
+  .bar-row .bar-fill.danger{background:linear-gradient(90deg,#8a2b2b,#5a1c1c);}
+  .card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;}
+  .card-grid .card{background:#241b16;border:1px solid var(--accent);border-radius:6px;padding:8px;
+    text-align:center;font-size:0.75rem;cursor:pointer;}
+  .card-grid .card b{display:block;font-size:0.95rem;color:var(--accent);margin-bottom:2px;}
+  .cmp-table{width:100%;border-collapse:collapse;font-size:0.8rem;}
+  .cmp-table th,.cmp-table td{border:1px solid #4a3a28;padding:6px;text-align:center;}
+  .cmp-table th{background:#241b16;color:var(--accent);}
+  .flow-steps{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .flow-steps .step{background:#241b16;border:1px solid var(--accent);border-radius:6px;padding:8px 10px;font-size:0.8rem;}
+  .flow-steps .arrow{color:var(--accent);font-size:1.2rem;}
+  .arrow-shift{text-align:center;font-size:1.4rem;color:var(--accent);}
+  .arrow-shift .rotate{display:inline-block;animation:windshift 2s ease-in-out infinite;}
+  @keyframes windshift{0%{transform:rotate(0deg);}50%{transform:rotate(180deg);}100%{transform:rotate(180deg);}}
+  .mountain-svg{width:100%;max-width:280px;display:block;margin:0 auto;}
+  #title-screen{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;background:radial-gradient(ellipse at center,#2c2018,#100c09);text-align:center;
+    padding:20px;z-index:30;}
+  #title-screen h1{color:var(--accent);font-size:1.5rem;margin-bottom:6px;letter-spacing:2px;}
+  #title-screen p{color:var(--text-dim);font-size:0.85rem;margin-bottom:26px;}
+  #title-screen button{padding:14px 28px;border-radius:6px;border:1px solid var(--accent);
+    background:linear-gradient(#c9a24b,#a3813a);color:#1b1512;font-weight:bold;font-size:1rem;
+    margin-bottom:10px;width:80%;max-width:280px;}
+  #title-screen button.secondary{background:none;border:1px solid #666;color:#eee;}
+  .tutorial-highlight{animation:pulseGlow 1s ease-in-out infinite;box-shadow:0 0 0 3px var(--accent) !important;}
+  @keyframes pulseGlow{0%,100%{opacity:1;}50%{opacity:.5;}}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="bgLayer" class="none"></div>
+  <div id="bgDim"></div>
+  <div id="spriteLayer"></div>
+  <div id="topbar">
+    <div class="title" id="phaseTitle">孫子の兵法</div>
+    <div>
+      <button id="btnBgm" onclick="toggleBgm()">♪ BGM</button>
+      <button id="btnGlossary" onclick="openPanel('glossary')">用語解説</button>
+      <button id="btnScenes" onclick="openPanel('scenes')">既読一覧</button>
+    </div>
+  </div>
+  <div id="stage"><div id="stageInner"></div></div>
+</div>
+
+<div id="title-screen">
+  <h1>孫子の兵法<br>ノベルゲーム</h1>
+  <p>全7フェーズ・実際の戦いを通じて、孫子の考え方を体験する物語</p>
+  <button onclick="startGame(false)">はじめから</button>
+  <button class="secondary" onclick="startGame(true)">続きから</button>
+</div>
+
+<div id="panel-overlay">
+  <div id="panel-inner"></div>
+</div>
+
+<audio id="bgmAudio" loop preload="none"></audio>
+
+<script>
+/* ========================= モバイルSafari対策 ========================= */
+function setVH(){
+  const vh = (window.visualViewport ? window.visualViewport.height : window.innerHeight) * 0.01;
+  document.documentElement.style.setProperty('--vh', vh + 'px');
+}
+setVH();
+window.addEventListener('resize', setVH);
+window.addEventListener('orientationchange', setVH);
+if(window.visualViewport){ window.visualViewport.addEventListener('resize', setVH); }
+
+/* ========================= アセット解決 ========================= */
+// 実ファイルが無い場合は自動でプレースホルダにフォールバックする
+const ASSET_BASE = 'assets/';
+function charImgPath(key){ return ASSET_BASE + 'characters/' + key + '.jpeg'; }
+function bgImgPath(key){ return ASSET_BASE + 'backgrounds/' + key + '.jpeg'; }
+function bgmPath(key){ return ASSET_BASE + 'audio/' + key + '.mp3'; }
+
+// 話者名 → 立ち絵アセットキーの対応表（デモ：曹操＝固有サンプル、その他モブ役＝汎用サンプル）
+const SPRITE_MAP = {
+  "曹操": "sample_unique",
+  "伝令": "sample_generic",
+  "武将": "sample_generic",
+  "役人": "sample_generic",
+  "若い部下": "sample_generic",
+  "武将の一人": "sample_generic"
+};
+// フェーズ → 背景アセットキーの対応表（デモ：フェーズ1のみサンプル背景を使用）
+const PHASE_BG = { 1: "sample_bg" };
+const DEFAULT_BGM = "bgm_usual";
+
+function normalizeSpeaker(name){
+  if(!name) return '';
+  return name.split('（')[0].split('＝')[0];
+}
+
+/* ========================= 簡易サウンド ========================= */
+let audioCtx = null;
+function ensureAudio(){ if(!audioCtx){ try{ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } }
+function playTap(){
+  ensureAudio(); if(!audioCtx) return;
+  const o = audioCtx.createOscillator(); const g = audioCtx.createGain();
+  o.type='sine'; o.frequency.value=880;
+  g.gain.setValueAtTime(0.08, audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime+0.12);
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start(); o.stop(audioCtx.currentTime+0.12);
+}
+document.addEventListener('click', playTap, {capture:true});
+
+/* ========================= BGM ========================= */
+const bgmAudio = document.getElementById('bgmAudio');
+let bgmOn = true;
+function setBgm(key){
+  const path = bgmPath(key || DEFAULT_BGM);
+  if(bgmAudio.getAttribute('data-key') === key) return;
+  bgmAudio.setAttribute('data-key', key);
+  bgmAudio.src = path;
+  bgmAudio.volume = 0.35;
+  if(bgmOn){ bgmAudio.play().catch(()=>{ /* 自動再生ブロック時は無音のまま。BGMボタンで再生 */ }); }
+}
+function toggleBgm(){
+  bgmOn = !bgmOn;
+  const btn = document.getElementById('btnBgm');
+  if(bgmOn){ bgmAudio.play().catch(()=>{}); btn.textContent = '♪ BGM'; }
+  else { bgmAudio.pause(); btn.textContent = '♪ 停止中'; }
+}
+
+/* ========================= 背景・立ち絵 ========================= */
+function setBackground(key){
+  const layer = document.getElementById('bgLayer');
+  if(!key){ layer.classList.add('none'); return; }
+  const img = new Image();
+  img.onload = ()=>{ layer.style.backgroundImage = 'url("'+bgImgPath(key)+'")'; layer.classList.remove('none'); };
+  img.onerror = ()=>{ layer.classList.add('none'); };
+  img.src = bgImgPath(key);
+}
+function setSprite(speakerRaw){
+  const layer = document.getElementById('spriteLayer');
+  const name = normalizeSpeaker(speakerRaw);
+  const key = SPRITE_MAP[name];
+  if(!key){ return; } // マッピングが無い話者ではスプライトを変更しない（直前の表示を維持）
+  layer.innerHTML = '';
+  const img = new Image();
+  img.onload = ()=>{ layer.innerHTML=''; const im=document.createElement('img'); im.src=charImgPath(key); layer.appendChild(im); };
+  img.onerror = ()=>{ /* 画像が無ければ何も表示しない（プレースホルダはキャラ紹介カード側で対応） */ };
+  img.src = charImgPath(key);
+}
+function clearSprite(){ document.getElementById('spriteLayer').innerHTML = ''; }
+
+/* ========================= 汎用図解レンダラー ========================= */
+function renderDiagram(d, container){
+  const box = document.createElement('div'); box.className='diagram';
+  if(d.title){ const t=document.createElement('div'); t.className='dtitle'; t.textContent=d.title; box.appendChild(t); }
+  if(d.kind==='barCompare'){
+    d.items.forEach(it=>{
+      const row=document.createElement('div'); row.className='bar-row';
+      const lab=document.createElement('div'); lab.className='label'; lab.textContent=it.label;
+      const bg=document.createElement('div'); bg.className='bar-bg';
+      const fill=document.createElement('div'); fill.className='bar-fill'+(it.danger?' danger':'');
+      bg.appendChild(fill);
+      row.appendChild(lab); row.appendChild(bg);
+      box.appendChild(row);
+      requestAnimationFrame(()=>{ fill.style.width = it.pct + '%'; });
+    });
+  } else if(d.kind==='cardGrid'){
+    const grid=document.createElement('div'); grid.className='card-grid';
+    d.items.forEach(it=>{
+      const c=document.createElement('div'); c.className='card';
+      c.innerHTML = '<b>'+it.label+'</b>'+(it.reading?'（'+it.reading+'）':'');
+      grid.appendChild(c);
+    });
+    box.appendChild(grid);
+  } else if(d.kind==='table'){
+    const tbl=document.createElement('table'); tbl.className='cmp-table';
+    const thead=document.createElement('tr');
+    d.headers.forEach(h=>{ const th=document.createElement('th'); th.textContent=h; thead.appendChild(th); });
+    tbl.appendChild(thead);
+    d.rows.forEach(r=>{
+      const tr=document.createElement('tr');
+      r.forEach(cell=>{ const td=document.createElement('td'); td.textContent=cell; tr.appendChild(td); });
+      tbl.appendChild(tr);
+    });
+    box.appendChild(tbl);
+  } else if(d.kind==='flow'){
+    const flow=document.createElement('div'); flow.className='flow-steps';
+    d.steps.forEach((s,i)=>{
+      if(i>0){ const a=document.createElement('span'); a.className='arrow'; a.textContent='→'; flow.appendChild(a); }
+      const st=document.createElement('div'); st.className='step'; st.textContent=s; flow.appendChild(st);
+    });
+    box.appendChild(flow);
+  } else if(d.kind==='windShift'){
+    const el=document.createElement('div'); el.className='arrow-shift';
+    el.innerHTML = '<span class="rotate">➤</span><div style="font-size:.7rem;color:var(--text-dim);margin-top:4px;">'+(d.note||'風向きが変わる')+'</div>';
+    box.appendChild(el);
+  } else if(d.kind==='mountain'){
+    box.innerHTML += '<svg class="mountain-svg" viewBox="0 0 280 140">'+
+      '<polygon points="10,130 140,20 270,130" fill="#3a2c1a" stroke="#c9a24b" stroke-width="2"/>'+
+      '<text x="140" y="45" fill="#c9a24b" font-size="11" text-anchor="middle">'+(d.topLabel||'高所：見晴らし良好')+'</text>'+
+      '<text x="140" y="125" fill="#e8d9b0" font-size="11" text-anchor="middle">'+(d.bottomLabel||'低所：視界が悪い')+'</text>'+
+      '</svg>';
+  }
+  container.appendChild(box);
+}
+
+/* ========================= データ：フェーズ・シーン ========================= */
+const PHASES = [
+{
+  id:1, title:"始計", sub:"官渡の戦い", tutorial:true,
+  glossary:{
+    characters:[
+      {name:"曹操（そうそう）", brief:"まだ格下と見られている実利主義の武将", detail:"感情より損得を優先する現実主義者で、判断が速い。このフェーズでは劣勢を五事七計で覆そうとしている。"},
+      {name:"荀彧（じゅんいく）", brief:"曹操の参謀。冷静な分析役", detail:"五事七計を体系立てて説明する、物語内の「先生役」。"},
+      {name:"郭嘉（かくか）", brief:"曹操の参謀。情報通", detail:"敵陣営の内部事情に詳しく、飄々とした話し方をする。"},
+      {name:"袁紹（えんしょう）", brief:"名門出身、兵力豊富だが人の意見を選り好みする武将", detail:"家柄への自負が強く、耳の痛い意見より心地よい言葉を好む。単純な悪役ではなく、恵まれた環境ゆえの弱点を持つ人物。"},
+      {name:"田豊（でんぽう）・沮授（そじゅ）", brief:"袁紹の参謀。慎重派だが冷遇されている", detail:"持久戦を進言する現実派だが、袁紹の側近たちに疎まれ意見が通らない。"}
+    ],
+    terms:[
+      {name:"参謀（さんぼう）／軍師（ぐんし）", brief:"リーダーに助言する役目の人", detail:"主君のそばで「どう戦えば勝てるか」を考え、時に命を懸けて意見する立場。"},
+      {name:"評定（ひょうじょう）", brief:"作戦を話し合う会議", detail:"武将や参謀が一堂に会し、方針を決める場。"},
+      {name:"五事（ごじ）", brief:"勝敗を見極める5つの視点", detail:"道・天・地・将・法の5項目。1つでも欠けた見方をすると判断を誤る。"},
+      {name:"七計（しちけい）", brief:"五事をさらに具体化した7つの比較項目", detail:"主君・将軍・天地の条件・法令・兵力・訓練度・賞罰の7点で両陣営を比べる。"},
+      {name:"算（さん）", brief:"勝つための材料・根拠", detail:"「算が多い」＝勝てる理由をたくさん持っている状態。"}
+    ],
+    places:[{name:"河北（かほく）", brief:"中国北部の広い地域", detail:"袁紹が治めている土地。この時代、複数の勢力が分立していた中国北部の代表的な地域。"}],
+    factions:[{name:"曹操 vs 袁紹", brief:"兵力少なめ・実利重視の曹操と、兵力多め・名門育ちの袁紹の対立", detail:"この時点では誰の目にも袁紹が有利。しかし五事七計で見ると必ずしもそうとは言えない。"}]
+  },
+  scenes:[
+    {id:"p1tutorial", type:"tutorial", steps:[
+      {text:"わあ……気づいたら、変な場所に……あ、あなたも来たんですね。よかった、一人じゃなかった。ここでは、いろんな時代の『戦（いくさ）』を見ていくことになるみたいです。私も詳しくないので、一緒に勉強させてください。", speaker:"小竹"},
+      {text:"あ、そうだ。画面の上のほうにボタンがありますよね？ これ、押してみてください。", speaker:"小竹", highlight:"glossary"},
+      {text:"これが『用語解説』です。難しい言葉や、知らない人の名前が出てきたら、ここを見れば、いつでも読み方や意味を確認できます。", speaker:"小竹", afterOpen:"glossary"},
+      {text:"こっちの『既読一覧』も押してみてください。", speaker:"小竹", highlight:"scenes"},
+      {text:"これまで見たシーンをもう一回見返せる機能です。『あれ、さっきの場面、誰だっけ？』ってなったら、ここから見返してください。じゃあ、始めましょうか。", speaker:"小竹", afterOpen:"scenes"}
+    ]},
+    {id:"p1s1", type:"story", lines:[
+      {s:"語り手", t:"今から2000年以上前、中国という広い国では、一人の皇帝がすべてを治めていたわけではなかった。力を持った武将たちが、あちこちで勢力を広げようとしのぎを削っていた。"},
+      {s:"語り手", t:"これから見るのは、そんな時代に実際にあった戦い。あなたは、まだ天下人ではない一人の武将――曹操に仕える、若き参謀（さんぼう＝リーダーに『どう戦うか』を助言する役目の人）だ。"},
+      {s:"小竹", t:"参謀……初めて聞く言葉です。えっと、軍師（ぐんし）っていうのも、似たような意味ですか？"},
+      {s:"語り手", t:"その通り。呼び方が違うだけで、どちらもリーダーのそばで作戦を考える役目のことだ。"}
+    ]},
+    {id:"p1intro_caocao", type:"intro", name:"曹操（そうそう）", color:"#8a2b2b", imgKey:"sample_unique",
+      tags:"役割：主君／性格：実利主義／立場：劣勢を五事七計で覆そうとしている",
+      desc:"まだこの時点では天下人ではなく、後で出てくる敵・袁紹に比べると『格下』と見られている武将。感情より損得を優先する現実主義者で、判断が速い。"},
+    {id:"p1s3", type:"story", lines:[
+      {s:"伝令", t:"申し上げます！ 袁紹軍、十万を超える兵をもって南下を開始した模様にございます！"}
+    ]},
+    {id:"p1d1", type:"story", lines:[
+      {diagram:{kind:"barCompare", title:"兵力の比較", items:[
+        {label:"曹操軍", pct:15},
+        {label:"袁紹軍", pct:95, danger:true}
+      ]}},
+      {s:"小竹", t:"うわ……あの駒の数、ぜんぜん違いますね。曹操さん、負けちゃうんじゃ……？"},
+      {s:"曹操", t:"数だけ聞けば、勝負にならんように聞こえるな。お前はどう見る？"},
+      {s:"小竹", t:"え、それ、わたしたちに聞いてます……？ ちょっと、わたしにも分からないです……"},
+      {s:"語り手", t:"小竹、いい疑問だ。戦は『兵の数』だけでは決まらない。後の時代に生きた孫子（そんし）という人物は、こう言い残している。"},
+      {s:"", t:"兵は國の大事、死生の地、存亡の道、察せざるべからざる也（へいはくにのだいじ、しせいのち、そんぼうのみち、さっせざるべからざるなり）", quote:true},
+      {s:"語り手", t:"『戦というのは、国にとって一番大事な出来事であり、兵士が生きるか死ぬか、国が続くか滅びるかを左右する。だからこそ、いい加減に決めてはいけない』という意味だ。"},
+      {s:"小竹", t:"なるほど……数字がすごいから怖い、で終わらせちゃダメってことですね。"}
+    ]},
+    {id:"p1intro_junyu", type:"intro", name:"荀彧（じゅんいく）", color:"#2f4a6a",
+      tags:"役割：参謀／性格：冷静・体系立てて説明する先生役",
+      desc:"曹操の参謀。冷静で、物事を順序立てて説明するのが得意。この物語では「先生役」に近い立ち位置で、あなたに知識を教えてくれる。"},
+    {id:"p1s5", type:"story", lines:[
+      {s:"荀彧", t:"勝ち負けを占うには、五つのポイントがございます。これを『五事（ごじ）』と申します。"},
+      {diagram:{kind:"cardGrid", title:"五事", items:[
+        {label:"道",reading:"どう"},{label:"天",reading:"てん"},{label:"地",reading:"ち"},{label:"将",reading:"しょう"},{label:"法",reading:"ほう"}
+      ]}},
+      {s:"小竹", t:"五事……この漢字、なんて読むんですか？"},
+      {s:"語り手", t:"一つ目は『道（どう）』。二つ目は『天（てん）』。三つ目は『地（ち）』。四つ目は『将（しょう）』。五つ目は『法（ほう）』だ。"},
+      {s:"荀彧", t:"『道』は、たとえるなら、クラスのみんなが同じ目標に向かって、本気でがんばろうと思えているかどうか、というようなものです。"},
+      {s:"小竹", t:"あ、それなら分かります！ 気持ちがバラバラなクラスより、まとまってるクラスのほうが、文化祭とかうまくいきますもんね。"},
+      {s:"荀彧", t:"『天』は季節や天気などの条件、『地』は地形の有利不利、『将』は指揮官の実力、そして『法』は軍の統制や仕組みが機能しているかどうかです。"},
+      {s:"小竹", t:"全部で5つ……覚えられるかな……"},
+      {s:"語り手", t:"無理に覚えようとしなくていい。この先、何度も出てくるから、自然と身につく。"}
+    ]},
+    {id:"p1q1", type:"quiz", mode:"knowledge",
+      q:"荀彧が最初に挙げた「道」とは、具体的にどのような状態を指すか。",
+      options:["リーダーとみんなの気持ちが一つになり、本気でがんばろうと思えている状態","天気や季節などの自然条件","土地の地形が険しいかどうか","リーダー個人の頭の良さ"],
+      correct:0,
+      explain:"「道」は五事の中でも最初に挙げられる項目で、外側の条件ではなく『人の気持ちがどれだけまとまっているか』を指す。"
+    },
+    {id:"p1intro_kakka", type:"intro", name:"郭嘉（かくか）", color:"#4a6a4a",
+      tags:"役割：参謀／性格：飄々・情報通",
+      desc:"曹操のもう一人の参謀。情報収集と人物観察が得意で、敵陣営の内部事情にも詳しい。少しマイペースな話し方をする。"},
+    {id:"p1s7", type:"story", lines:[
+      {s:"郭嘉", t:"殿、面白い話がございます。袁紹殿の陣営、外から見るほど一枚岩ではございませぬ。"},
+      {s:"郭嘉", t:"田豊殿・沮授殿は、じっくり構えて我らを追い詰める作戦（持久戦）を進言しているそうです。しかし袁紹殿は、威勢のいい言葉を言う側近のほうを好んで聞き入れる。地道な策を説く二人は、むしろ煙たがられているとか。"},
+      {s:"小竹", t:"え、それって『将』のところで話していた、リーダーの実力に関係するやつですか？"},
+      {s:"語り手", t:"よく気づいたな、小竹。まさにその通り。兵の数がいくら多くても、それをまとめる者の判断力が鈍っていれば、宝の持ち腐れになる。"},
+      {s:"曹操", t:"兵は多くとも、まとめる者の耳がふさがっていては、な。"}
+    ]},
+    {id:"p1intro_enshou", type:"intro", name:"袁紹（えんしょう）", color:"#6a4a2a",
+      tags:"役割：敵の主君／性格：名門育ち・側近の言葉を選り好みする",
+      desc:"河北を治める、名門の出の武将。兵力・資金ともに豊富。ただし、いいところの生まれというプライドが高く、耳の痛い意見より気持ちのいい言葉を好んで聞いてしまう癖がある。単なる悪役ではなく、恵まれすぎた環境が判断力を鈍らせるという、誰にでも起こりうる弱点を持つ人物。"},
+    {id:"p1intro_denpou", type:"intro", name:"田豊（でんぽう）・沮授（そじゅ）", color:"#3a3a5a",
+      tags:"役割：袁紹の参謀／性格：慎重・現実派",
+      desc:"じっくり構えて相手を追い詰める持久戦を進言する現実派だが、袁紹の側近たちに煙たがられ、意見が通りにくい立場にある。"},
+    {id:"p1s8", type:"story", lines:[
+      {s:"荀彧", t:"五事をもとに、さらに具体的な七つの問いで比べます。①主君はどちらが道を得ているか。②将軍はどちらが有能か。③天地の条件はどちらが有利か。④法令はどちらが機能しているか。⑤兵の数はどちらが多いか。⑥訓練度はどちらが高いか。⑦賞罰はどちらが明確か。"},
+      {diagram:{kind:"table", title:"七計での比較", headers:["項目","曹操","袁紹"], rows:[
+        ["①道","◯","△"],["②将","◯","△"],["③天地","△","△"],["④法","◯","△"],["⑤兵の数","✕","◯"],["⑥訓練度","◯","△"],["⑦賞罰","◯","△"]
+      ]}},
+      {s:"小竹", t:"あ！ 表にすると分かりやすいです。兵の数だけ見たら負けてるように見えるけど、他は互角か、むしろ曹操さんたちのほうがいいところも……"},
+      {s:"曹操", t:"一つずつでいい。正直に答えよ。見栄を張っても仕方がない。"}
+    ]},
+    {id:"p1branch1", type:"quiz", mode:"badend",
+      q:"「兵の数」という一つの項目だけを根拠に、戦うかどうかを決めてよいか。",
+      options:[
+        {t:"その通りだ。兵の数で負けている以上、ここは退くべきだ", correct:false,
+          bad:"たった一つの数字にすがるように、話し合いの空気は『退却』へと傾いていく。兵の数という分かりやすい数字だけで判断してしまうこと――それは、この後、袁紹自身が繰り返してしまう失敗でもある。"},
+        {t:"兵の数以外の六つのポイントも合わせて、全部まとめて判断すべきだ", correct:true,
+          otherwise:"ちなみに、もし『兵の数だけで判断して退くべきだ』を選んでいたら――話し合いの空気は撤退に傾き、袁紹に付け入る隙を与えていただろう。今回、その道を選ばずに済んだわけだ。"}
+      ]},
+    {id:"p1s4", type:"story", lines:[
+      {s:"荀彧", t:"その通りです。数だけを見れば厳しくても、リーダーの器・将の力・ルールの整い方で我らに分があるなら、まだ十分に戦える道はございます。"},
+      {s:"曹操", t:"――それで、お前の結論は。"}
+    ]},
+    {id:"p1branch2", type:"quiz", mode:"badend",
+      q:"最終的に、どちらの意見を伝えるか。",
+      options:[
+        {t:"兵の数の差は大きいですが、リーダーの器・将の力・ルールの整い方で我らに分があります。戦うべきかと存じます", correct:true,
+          otherwise:"もし『仲直りの道を探るべきだ』を選んでいたら、袁紹はそれを弱腰と受け取り、南下の勢いをさらに強めていただろう。今回はその展開を避けられた。"},
+        {t:"兵の数の差を覆すのは、やはり難しいと思います。ここは仲直りの道を探るべきかと", correct:false,
+          bad:"仲直りの使者を送るが、袁紹はそれを『弱腰』と受け取り、こちらへ向かう勢いをさらに強めてしまう。数年後、曹操は袁紹に領地を大きく奪われていた。"}
+      ]},
+    {id:"p1end", type:"story", lines:[
+      {s:"曹操", t:"よかろう。数ではない、五つの見るべきポイントと七つの問いで見た我らの分を信じよう。"},
+      {s:"", t:"算多ければ勝ち、算少なければ勝たず。而るを況んや算なきに於てをや（さんおおければかち、さんすくなければかたず。しかるをいわんやさんなきにおいてをや）", quote:true},
+      {s:"語り手", t:"『勝つための材料・根拠が多ければ勝ち、少なければ勝てない。まして材料が何もないまま戦うなど、なおさら勝てるはずがない』という意味だ。フェーズ1、完。"}
+    ]},
+    {id:"p1final", type:"quiz", mode:"knowledge", final:true,
+      q:"このフェーズの結論として正しいのはどれか。",
+      options:["兵の数の差は、それだけで絶対的な判断基準になる","兵の数以外の要素も含めて、全部まとめて判断すべきである"],
+      correct:1,
+      explain:"数字だけに頼らず、多角的な物差しで判断することが五事七計の考え方。"
+    },
+    {id:"p1trans", type:"story", lines:[
+      {s:"語り手", t:"フェーズ1、お疲れさま。次はまったく別の時代・別の国の物語だ。"},
+      {s:"小竹", t:"曹操さんたちとは、もうお別れなんですね……ちょっと寂しいです。"},
+      {s:"語り手", t:"今回の舞台は『趙（ちょう）』という国。時代は官渡の戦いより、さらに150年以上前にさかのぼる。登場人物も国も一新される。心の準備はいいか？"},
+      {s:"小竹", t:"はい……! 頑張って覚えます。"}
+    ]}
+  ]
+},
+{
+  id:2, title:"作戦・謀攻", sub:"長平の戦い",
+  glossary:{
+    characters:[
+      {name:"趙王（ちょうおう）", brief:"趙国の王。財政難で焦っている", detail:"長引く対陣で国の蔵が乏しくなり、早期決着を望んでいる。"},
+      {name:"廉頗（れんぱ）", brief:"趙の将軍。持久戦を続けるベテラン", detail:"正面衝突を避け、相手を消耗させる守りの采配を続けている。「臆病者」と陰口を叩かれるが、実は理にかなった判断。"},
+      {name:"藺相如（りんしょうじょ）", brief:"趙の重臣。廉頗を支持する冷静な判断役", detail:"うわさに動じず、実戦経験の有無を重視する現実的な人物。"},
+      {name:"趙括（ちょうかつ）", brief:"趙の若い武将。理論には詳しいが実戦経験なし", detail:"名将の家に生まれ兵法の知識と弁は立つが、実際に軍を率いた経験がない。"},
+      {name:"白起（はくき）", brief:"秦の将軍。冷徹な戦い方で知られる", detail:"勝つためには手段を選ばない徹底した将。"},
+      {name:"范雎（はんしょ）", brief:"秦の重臣。策略で敵を動かす", detail:"うわさや偽情報で敵の内部対立や誤った人事判断を引き起こす策略家。"}
+    ],
+    terms:[
+      {name:"持久戦（じきゅうせん）", brief:"長く粘って相手を消耗させる戦い方", detail:"無理に決着をつけず、時間を味方にする戦法。ただし自軍の財政・食料も同時に消耗する諸刃の剣でもある。"},
+      {name:"反間（はんかん）／離間計（りかんけい）", brief:"うわさで敵の判断を狂わせる策略", detail:"偽の情報を流し、敵の内部対立や誤った人事判断を引き起こすこと。"},
+      {name:"謀攻（ぼうこう）", brief:"戦わずに、相手の作戦そのものを崩して勝つ考え方", detail:"正面から兵をぶつけずに、相手の意思決定に働きかけて勝利する、孫子が最上とする勝ち方。"},
+      {name:"兵站（へいたん）", brief:"戦を続けるための食料・物資の仕組み", detail:"どれほど強い軍でも、これが尽きれば戦えなくなる。"}
+    ],
+    places:[{name:"長平（ちょうへい）", brief:"この戦いが行われた場所", detail:"趙の領内、秦との国境に近い地。"}],
+    factions:[{name:"趙 vs 秦", brief:"廉頗の持久戦で長期間しのいでいる趙と、決着を急ぐ秦", detail:"正面からは崩せず膠着していたが、秦は情報戦で趙の内部に働きかける方針に転換する。"}]
+  },
+  scenes:[
+    {id:"p2title", type:"story", lines:[
+      {s:"語り手", t:"フェーズ2、始まりだ。"}
+    ]},
+    {id:"p2s2", type:"story", lines:[
+      {diagram:{kind:"barCompare", title:"趙の国庫（時間経過とともに減っていく）", items:[
+        {label:"開戦時", pct:90}, {label:"現在", pct:25, danger:true}
+      ]}},
+      {s:"役人", t:"王よ、申し上げにくいことながら……この長い対陣のせいで、国の蔵の米も底が見えてまいりました。"},
+      {s:"趙王", t:"廉頗が動かぬからだ。いつまで守ってばかりいるつもりか。"},
+      {s:"小竹", t:"あ、あのゲージ、どんどん減ってますね……これってまずいんじゃ……"},
+      {s:"語り手", t:"その通り。戦は始めるより続けるほうがずっとお金がかかる。孫子はこう言い残している。"},
+      {s:"", t:"兵は拙速を聞くも、未だ巧の久しきを覩ざる也（へいはせっそくをきくも、いまだこうのひさしきをみざるなり）", quote:true},
+      {s:"語り手", t:"『戦は、多少やり方が粗くても速く終わらせた例はあっても、上手に長引かせて得をした例は聞いたことがない』という意味だ。"}
+    ]},
+    {id:"p2q1", type:"quiz", mode:"knowledge",
+      q:"長引く戦が国に与える一番の問題は何か。",
+      options:["兵士や国の財政・食料が消耗していくこと","兵士が強くなりすぎること","敵の情報が増えすぎること"],
+      correct:0, explain:"長い戦の一番の問題は、勝ち負け以前に、国そのものの体力（お金・食料・人手）が尽きてしまうこと。"
+    },
+    {id:"p2intro_renpa", type:"intro", name:"廉頗（れんぱ）", color:"#5a4a2a",
+      tags:"役割：趙の将軍／性格：老練・我慢強い",
+      desc:"年配のベテランで、無理に戦わず守りに徹する「持久戦」を続けている。国内では「臆病者」と陰口を叩かれているが、実際は最も理にかなった判断をしている。"},
+    {id:"p2s4", type:"story", lines:[
+      {s:"若い部下", t:"将軍、なぜ攻めないのですか。国では『臆病者』とまで言われておりますぞ。"},
+      {s:"廉頗", t:"臆病、で構わん。正面からぶつかれば、こちらの被害のほうが大きい。相手が焦って動くのを待てばよい。"},
+      {s:"小竹", t:"臆病って言われても平気なんですか……？ すごい精神力です。"},
+      {s:"語り手", t:"廉頗の考えは、実は謀攻篇の教えに近い。無理に攻めて兵を失うより、守りを固めて相手を消耗させ、戦わずに済む状況を作り出そうとしている。"}
+    ]},
+    {id:"p2intro_hansho", type:"intro", name:"范雎（はんしょ）・白起（はくき）", color:"#2a2a3a",
+      tags:"役割：秦の重臣・将軍／性格：策略家・冷徹",
+      desc:"范雎は武力ではなく「策略」で敵を動かす名手。白起は勝つためには手段を選ばない冷徹な将軍。"},
+    {id:"p2s6", type:"story", lines:[
+      {s:"范雎", t:"廉頗が動かぬ限り、我らも無理に攻められませぬ。ならば――廉頗そのものを、趙の内側から取り除いてしまえばよいのです。"},
+      {s:"白起", t:"策があるのか。"},
+      {s:"范雎", t:"趙の都に、うわさを流します。『秦が本当に恐れているのは廉頗ではない。もし趙括があの若さで将軍になったら、それこそ恐ろしい』とね。"},
+      {s:"小竹", t:"え、それって嘘の情報を流すってことですか？ そんなのアリなんですか……？"},
+      {s:"語り手", t:"小竹、驚くのも無理はない。だが孫子はこう言っている。"},
+      {s:"", t:"百戰百勝は、善の善なるものに非ず、戰はずして人の兵を屈するは、善の善なるもの也（ひゃくせんひゃくしょうは、ぜんのぜんなるものにあらず、たたかわずしてひとのへいをくっするは、ぜんのぜんなるものなり）", quote:true},
+      {s:"語り手", t:"『百回戦って百回勝つことが最高なのではない。戦わずに敵の軍を屈服させることこそ、本当の意味で最高のやり方だ』。范雎がやろうとしているのは、刀を交える前に相手の判断そのものを崩す策だ。"}
+    ]},
+    {id:"p2intro_choukatsu", type:"intro", name:"趙括（ちょうかつ）・藺相如（りんしょうじょ）", color:"#4a2a4a",
+      tags:"役割：趙の武将・重臣",
+      desc:"趙括は名将の家に生まれ兵法の知識と弁は立つが、実際に軍を率いた経験がない。藺相如は冷静な判断力で知られ、廉頗の続投を強く支持している。"},
+    {id:"p2s8", type:"story", lines:[
+      {s:"趙王", t:"聞いたか。秦が本当に恐れているのは、廉頗ではなく趙括だという話を。"},
+      {s:"藺相如", t:"王よ、それはただのうわさにすぎませぬ。趙括殿は実戦経験がございません。今、大切な守りの将を代えるのは危のうございます。"},
+      {s:"趙王", t:"しかし、蔵が空になるのを待つわけにもいかぬ。誰か、決めてくれ。"}
+    ]},
+    {id:"p2branch1", type:"quiz", mode:"badend",
+      q:"趙王に、どちらを進言するか。",
+      options:[
+        {t:"うわさに惑わされてはなりません。実戦経験のない趙括殿への交代は危険です。廉頗殿の続投を進言すべきです", correct:true,
+          otherwise:"もし趙括への交代を選んでいたら、趙は実戦経験のない将軍のもとで大敗し、多くの兵を失っていただろう。今回はその道を避けられた。"},
+        {t:"趙括殿は兵法に詳しく、弁も立ちます。ここは思い切って代えるべきかと", correct:false,
+          bad:"趙王は趙括を新しい将軍に任命する。趙括は守りを捨て、積極的に打って出た。待ち構えていた白起は退路を断って包囲する。実際の歴史でも、趙はこの選択で四十数万ともいわれる兵の多くを失ったと伝えられている（人数には諸説あり）。"}
+      ]},
+    {id:"p2end", type:"story", lines:[
+      {s:"藺相如", t:"よくぞ申された。私も同じ考えです。"},
+      {s:"趙王", t:"……分かった。廉頗の続投を認める。"},
+      {s:"語り手", t:"うわさに揺さぶられず、実際の力量で判断したことで、趙は范雎の策にはまらずに済んだ。『戦わずして勝つ』は、味方だけでなく、敵にも使われうる考え方だ。フェーズ2、完。"}
+    ]},
+    {id:"p2final", type:"quiz", mode:"knowledge", final:true,
+      q:"この戦いから学べることとして、もっともふさわしいものはどれか。",
+      options:["兵法の知識さえあれば、実戦経験がなくても大軍を任せてよい","うわさや焦りに流されず、実際の力量で判断することが大切"],
+      correct:1, explain:"うわさに動かされず実力で判断すること、そして長期戦のコストを理解することが、このフェーズの核心。"
+    },
+    {id:"p2trans", type:"story", lines:[
+      {s:"語り手", t:"フェーズ2、ここまで。次のフェーズでは――"},
+      {s:"小竹", t:"あ、また新しい国と人物を覚えるんですね、頑張ります……"},
+      {s:"語り手", t:"いや、次は少し違う。次に見るのは、フェーズ1で見た曹操たちの、その続きの物語だ。"},
+      {s:"小竹", t:"え! 曹操さんたちに、また会えるんですか!?"},
+      {s:"語り手", t:"ああ。フェーズ1の最後で少し触れた、袁紹陣営の内部事情――あれが、次のフェーズで効いてくる。"}
+    ]}
+  ]
+},
+{
+  id:3, title:"軍形・兵勢", sub:"官渡の戦い後半（烏巣奇襲）",
+  glossary:{
+    characters:[
+      {name:"許攸（きょゆう）", brief:"袁紹の元参謀。待遇への不満から曹操側へ寝返る", detail:"意見を聞き入れられず、家族まで捕らえられたことがきっかけで離反。"},
+      {name:"淳于瓊（じゅんうけい）", brief:"袁紹軍の武将。食料庫「烏巣」の守備担当", detail:"油断が大きく、守りが手薄になっていた。"}
+    ],
+    terms:[
+      {name:"軍形（ぐんけい）", brief:"まず負けない態勢を先に作る考え方", detail:"態勢を整えることが先、勝機を待つのはその後、という順序が重要。"},
+      {name:"兵勢（へいせい）", brief:"ためた勢いを一気に解き放つこと", detail:"チャンスが来た瞬間に、力を分散させず集中させる。"},
+      {name:"奇正（きせい）", brief:"正攻法「正」と意外な一手「奇」の組み合わせ", detail:"正面で支えながら、別動隊で意表を突くような戦い方。"}
+    ],
+    places:[{name:"烏巣（うそう）", brief:"袁紹軍の食料庫があった場所"}],
+    factions:[{name:"曹操 vs 袁紹", brief:"フェーズ1に続く対立", detail:"袁紹側の内部の不満（許攸の寝返り）が勝敗を左右する鍵になる。"}]
+  },
+  scenes:[
+    {id:"p3s1", type:"story", lines:[
+      {s:"語り手", t:"フェーズ3は、フェーズ1の続きだ。曹操・荀彧・郭嘉・袁紹――みんな覚えているだろうか。"},
+      {s:"小竹", t:"はい! 五事七計で頑張って戦うって決めたところですよね。"},
+      {s:"語り手", t:"その通り。あれから時間が経ち、状況は変わりつつある。"},
+      {s:"武将", t:"殿、我らの兵糧もそろそろ底を突きます。このまま持ちこたえられるとは思えませぬ……いっそ、退くべきでは。"},
+      {s:"荀彧", t:"（曹操に宛てた文を読み上げる）殿、退けば、これまでの我慢がすべて無駄になります。今しばらく、持ちこたえるべきです。"},
+      {s:"曹操", t:"……分かっている。"}
+    ]},
+    {id:"p3intro_kyoyu", type:"intro", name:"許攸（きょゆう）", color:"#5a5a2a",
+      tags:"役割：元袁紹陣営／性格：不満を抱え離反",
+      desc:"もともと袁紹の参謀の一人。意見を聞き入れてもらえず、家族まで袁紹側の別の役人ともめて捕らえられてしまったことをきっかけに、曹操側へ寝返る人物。"},
+    {id:"p3s4", type:"story", lines:[
+      {s:"許攸", t:"曹操殿にお目通り願いたい。私は袁紹軍にいた許攸と申す者。もう、あの主君には仕えられぬ。"},
+      {s:"曹操", t:"何があった。"},
+      {s:"許攸", t:"私の意見は聞き入れられず、家族まで捕らえられた。ばかばかしくなり申した。その代わり――袁紹軍の食料をすべて蓄えている『烏巣』の守りが、驚くほど手薄なことをお教えしよう。"},
+      {diagram:{kind:"flow", title:"軍形の考え方", steps:["①負けない態勢を先に作る（フェーズ1で完了）","②勝てるチャンスを待つ（今、ここ）"]}},
+      {s:"小竹", t:"軍形（ぐんけい）……？ また新しい言葉が。"},
+      {s:"語り手", t:"軍形とは、まず自分が負けない態勢を先に作っておく、という考え方だ。孫子はこう言っている。"},
+      {s:"", t:"勝兵は先づ勝ちて而る後に戦を求め、敗兵は先づ戦ひて而る後に勝を求む（しょうへいはまずかちてしかるのちにたたかいをもとめ、はいへいはまずたたかいてしかるのちにかちをもとむ）", quote:true},
+      {s:"語り手", t:"『勝つ軍は、先に勝てる態勢を作ってから戦いを始める。負ける軍は、先に戦ってから、あとになって勝ち方を探そうとする』。曹操たちはフェーズ1で、すでに①を作っていた。今、目の前に現れたのは②のチャンスだ。"}
+    ]},
+    {id:"p3q1", type:"quiz", mode:"knowledge",
+      q:"「勝兵は先づ勝ちて而る後に戦を求め」とは、どういう意味か。",
+      options:["勝つ軍は、先に勝てる態勢を整えてから戦いを始める","勝つ軍は、とにかく先に戦いを仕掛ける","勝つ軍は、戦う前に必ず占いをする"],
+      correct:0, explain:"ポイントは『順番』。まず自分の態勢を整え、負けない状態を作ってから戦う。"
+    },
+    {id:"p3branch1", type:"quiz", mode:"badend",
+      q:"烏巣攻撃を、どのように行うべきか。",
+      options:[
+        {t:"曹操自らが精鋭部隊を率いて、一気に烏巣を焼き払う。本陣の守りは最小限に絞り、勢いを一点に集中させる", correct:true,
+          otherwise:"もし少しずつ攻める方を選んでいたら、その間に袁紹軍の援軍が到着し、逆に包囲されていただろう。今回はその危険を避けられた。"},
+        {t:"危険を避けるため、少数の部隊を何度かに分けて、様子を見ながら少しずつ攻める", correct:false,
+          bad:"小分けにした部隊は烏巣の守りを崩しきれないまま時間だけが過ぎ、その間に袁紹軍の援軍が到着して逆に包囲されてしまう。せっかくのチャンスも、勢いを分散させては意味がない。"}
+      ]},
+    {id:"p3intro_junuu", type:"intro", name:"淳于瓊（じゅんうけい）", color:"#2a4a4a",
+      tags:"役割：袁紹軍の武将／性格：油断が大きい",
+      desc:"食料庫「烏巣」の守りを任されているが、油断が大きい。"},
+    {id:"p3end", type:"story", lines:[
+      {s:"曹操", t:"よし。今この瞬間に、すべてを懸ける。"},
+      {s:"淳于瓊", t:"なに!? まさか、曹操自らが……!?"},
+      {s:"", t:"炎が夜空を焦がす。食料をすべて失った袁紹軍に動揺が走り、指揮系統は乱れ、なだれを打つように崩れていく。"},
+      {s:"", t:"激水の疾き、石を漂はすに至るものは勢也（げきすいのはやき、いしをただよわすにいたるものはいきおいなり）", quote:true},
+      {s:"語り手", t:"『激しく流れる水が、石までも押し流してしまうほどの力を持つのは、そこに勢いがあるからだ』。曹操が最後の一点に懸けた決断は、まさにこの勢いを生み出した。フェーズ3、完。"}
+    ]},
+    {id:"p3final", type:"quiz", mode:"knowledge", final:true,
+      q:"「兵勢」の考え方としてもっともふさわしいものはどれか。",
+      options:["力を少しずつ、様子を見ながら小出しにする","ためた勢いを、ここぞという瞬間に一気に解き放つ"],
+      correct:1, explain:"態勢を整えたあとに訪れたチャンスには、勢いを集中させて一気に仕掛けることが大切。"
+    },
+    {id:"p3trans", type:"story", lines:[
+      {s:"語り手", t:"フェーズ3、完。曹操たちの物語はここで一区切りだ。"},
+      {s:"小竹", t:"次はまた、新しい国と人物ですか？"},
+      {s:"語り手", t:"そうだ。次は、時代も国もまったく違う――東晋という国の物語だ。今度は、圧倒的な大軍にどう立ち向かうかという話になる。"}
+    ]}
+  ]
+},
+{
+  id:4, title:"虚実", sub:"淝水の戦い",
+  glossary:{
+    characters:[
+      {name:"苻堅（ふけん）", brief:"前秦の皇帝。大軍を率いる自信家", detail:"数十万ともいわれる大軍を動員できるが、多民族混成軍で内部の結束は弱い。"},
+      {name:"謝玄（しゃげん）", brief:"東晋の将軍。少数兵力での駆け引きに長ける", detail:"相手の構造的な弱さを見抜いて突く戦略眼を持つ。"},
+      {name:"謝安（しゃあん）", brief:"東晋の重臣。落ち着いた人柄", detail:"勝利の知らせを受けても表情を変えなかったという逸話が伝わる（伝承の可能性あり）。"},
+      {name:"朱序（しゅじょ）", brief:"前秦軍にいるが、心は東晋に忠実な人物", detail:"以前の戦いで捕らえられ前秦軍に組み込まれているが、内側から東晋に協力する。"}
+    ],
+    terms:[
+      {name:"虚実（きょじつ）", brief:"見た目の強さと本当の中身が一致するとは限らない考え方", detail:"数が多くても「虚（空っぽ）」なことがあり、数が少なくても「実（充実）」なことがある。"},
+      {name:"風声鶴唳・草木皆兵", brief:"些細なことにまで怯えてしまうこと", detail:"この戦いの前秦軍の混乱ぶりから生まれた言い回し。孫子自身の言葉ではなく、後の歴史書による表現。"}
+    ],
+    places:[{name:"淝水（ひすい）", brief:"この戦いが行われた川の名前"}],
+    factions:[{name:"前秦 vs 東晋", brief:"数十万の大軍だが結束の弱い前秦と、少数だがまとまりのある東晋"}]
+  },
+  scenes:[
+    {id:"p4s1", type:"story", lines:[
+      {s:"語り手", t:"フェーズ4は、また新しい時代・新しい国の物語だ。今度は東晋という国と、それを攻める前秦という国の戦いを見ていく。"},
+      {s:"小竹", t:"また一から覚えます……!"}
+    ]},
+    {id:"p4intro_fuken", type:"intro", name:"苻堅（ふけん）", color:"#5a2a2a",
+      tags:"役割：前秦の皇帝／性格：自信家",
+      desc:"中国北部の広い範囲を治め、数十万ともいわれる大軍を動員できる実力者。「わが軍の鞭をすべて川に投げ入れれば、流れが止まるほどだ」と豪語したという逸話が伝わる（誇張を含む言い伝えの可能性が高い）。"},
+    {id:"p4s2", type:"story", lines:[
+      {diagram:{kind:"barCompare", title:"兵力の比較", items:[{label:"前秦",pct:95},{label:"東晋",pct:15}]}},
+      {s:"東晋の兵士", t:"……とても敵う数ではありません。噂では、鞭をすべて川に投げ込めば流れが止まるほどの大軍だとか。"}
+    ]},
+    {id:"p4intro_shagen", type:"intro", name:"謝玄（しゃげん）", color:"#2a4a5a",
+      tags:"役割：東晋の将軍／性格：戦略的",
+      desc:"少ない兵をうまく使う駆け引きに長けている。"},
+    {id:"p4s3b", type:"story", lines:[
+      {s:"謝玄", t:"数だけを見れば、たしかに恐ろしい。だが――"},
+      {s:"小竹", t:"虚実……？ また新しい言葉が出てきました。"},
+      {s:"語り手", t:"孫子は、数の多さより『中身が詰まっているか、空っぽか』を見極めることを大事にしている。これを『虚実（きょじつ）』という。"}
+    ]},
+    {id:"p4intro_shujo", type:"intro", name:"朱序（しゅじょ）", color:"#4a2a5a",
+      tags:"役割：前秦軍に組み込まれた元東晋の将軍／性格：心は東晋に忠実",
+      desc:"以前の戦いで捕らえられ、今は前秦軍の中で働かされている。しかし心の中では、今も東晋への忠誠を捨てていない。"},
+    {id:"p4s6", type:"story", lines:[
+      {diagram:{kind:"barCompare", title:"前秦軍の内実（見た目の量 vs 実際のまとまり）", items:[
+        {label:"兵力（量）", pct:90}, {label:"まとまり", pct:20, danger:true}
+      ]}},
+      {s:"朱序", t:"（伝言）この大軍は、見た目ほど一枚岩ではない。多くの民族から寄せ集めた兵で、まとまりは薄い。もし内側から崩れれば、一気に総崩れになるだろう。"},
+      {s:"小竹", t:"数はすごいのに、中身はスカスカ……ということですか。"},
+      {s:"語り手", t:"その通り。見た目には『実』に見える大軍でも、中身は寄せ集めで、まとまりを欠く『虚』な部分を抱えていることがある。"}
+    ]},
+    {id:"p4q1", type:"quiz", mode:"knowledge",
+      q:"朱序の情報が示していたことは何か。",
+      options:["前秦軍は数こそ多いが、内部のまとまりは弱く崩れやすい可能性がある","前秦軍には隠された最強部隊がいる","前秦軍の食料が尽きかけている"],
+      correct:0, explain:"見た目の強さ（実）と本当の中身（虚か実か）は一致しないことがある、というのが虚実の考え方。"
+    },
+    {id:"p4branch1", type:"quiz", mode:"badend",
+      q:"謝玄は「少し下がって、川を渡らせてほしい」と苻堅に提案する。参謀としてどう考えるべきか。",
+      options:[
+        {t:"あえて相手に動いてもらうことで、まとまりの弱い大軍に『後退』の号令を出させる。混乱のきっかけになりうるので、この提案を押し通すべきだ", correct:true,
+          otherwise:"もし安全策を取っていたら、両軍はにらみ合ったまま長期戦に入り、数で劣る東晋がじわじわ不利になっていっただろう。"},
+        {t:"川を挟んで守りに徹していたほうが安全だ。危険な提案は取り下げるべきだ", correct:false,
+          bad:"安全策を取り、両軍はにらみ合ったまま長期戦に入る。兵力に劣る東晋は、時間が経つほど不利になっていく。せっかくの『相手のまとまりの弱さ』を突くチャンスを、自分から手放してしまった。"}
+      ]},
+    {id:"p4end", type:"story", lines:[
+      {s:"苻堅", t:"なるほど、道理だ。少し下がらせよ。"},
+      {s:"朱序", t:"（大声で）秦軍が敗れたぞ! 秦軍が敗れたぞ!"},
+      {s:"", t:"もともとまとまりの薄かった前秦の大軍は、後退の号令と叫び声が重なりパニックに陥る。風の音、鶴の鳴き声にまで怯え、草木までもが敵兵に見えるほどの混乱が広がった――後の世に『風声鶴唳』『草木皆兵』という言葉が生まれるほどの総崩れだった。"},
+      {s:"", t:"善く戦ふ者は人を致して人に致されず（よくたたかうものはひとをいたしてひとにいたされず）", quote:true},
+      {s:"語り手", t:"『戦い上手な者は、敵を自分の都合で動かし、自分が敵の都合で動かされることはない』。"},
+      {s:"", t:"能く敵人をして自ら至らしむるものは、之れを利すればなり（よくてきじんをしてみずからいたらしむるものは、これをりすればなり）", quote:true},
+      {s:"語り手", t:"『敵を自分から動かせるのは、それが敵にとって得だと思わせているからだ』。"}
+    ]},
+    {id:"p4intro_shaan", type:"intro", name:"謝安（しゃあん）", color:"#3a5a3a",
+      tags:"役割：東晋の重臣／性格：落ち着いた人柄",
+      desc:"勝利の知らせが届いたとき、謝安は囲碁を打っている最中だったという。表情を変えず打ち続けたが、あとで立ち上がったとき、履物の歯が折れていたことに自分でも気づかなかった、と伝えられている（史実の細部までは確認しづらいが、こうした逸話が残っている）。"},
+    {id:"p4final", type:"quiz", mode:"knowledge", final:true,
+      q:"「虚実」の考え方としてもっともふさわしいものはどれか。",
+      options:["見た目の強さ（数など）と本当の中身の強さは必ずしも一致しない","兵の数が多いほうが必ず勝つ"],
+      correct:0, explain:"数の多さに惑わされず、中身のまとまりを見極めることが虚実の本質。"
+    },
+    {id:"p4trans", type:"story", lines:[
+      {s:"語り手", t:"フェーズ4、完。次はまた新しい時代・新しい国だ。"},
+      {s:"小竹", t:"次はどんな戦いですか？"},
+      {s:"語り手", t:"川を背にして戦う、という一風変わった戦い方が出てくる。今の常識では考えられないやり方だ。"}
+    ]}
+  ]
+},
+{
+  id:5, title:"軍争・九変", sub:"井陘の戦い（背水の陣）",
+  glossary:{
+    characters:[
+      {name:"韓信（かんしん）", brief:"漢の将軍。寡兵で大軍を破る型破りな采配で知られる"},
+      {name:"陳余（ちんよ）", brief:"趙の将軍。正攻法にこだわる硬直した判断をする"},
+      {name:"李左車（りさしゃ）", brief:"陳余の参謀。現実的な策を進言するが聞き入れられない"}
+    ],
+    terms:[
+      {name:"軍争（ぐんそう）", brief:"敵と有利な条件を奪い合う駆け引き"},
+      {name:"迂直の計（うちょくのけい）", brief:"遠回りに見える道を逆に利用する発想"},
+      {name:"九変（きゅうへん）", brief:"状況に応じて定石そのものを破る判断力"},
+      {name:"背水の陣（はいすいのじん）", brief:"川を背にして退路を断ち、あえて戦う陣形", detail:"現代でも「背水の陣で臨む」という言い方で使われる、後がない状況での勝負を指す表現。"}
+    ],
+    places:[{name:"井陘（せいけい）", brief:"狭く険しい山あいの通り道"}],
+    factions:[{name:"漢 vs 趙", brief:"数千規模の寡兵の漢と、二十万と号する趙", detail:"※このフェーズの趙は、フェーズ2の趙とは別の、後に復興された国。"}]
+  },
+  scenes:[
+    {id:"p5s0", type:"story", lines:[
+      {s:"語り手", t:"先に言っておこう。これから出てくる『趙（ちょう）』は、フェーズ2で見た趙とは別の国だ。フェーズ2の趙はすでに滅んでおり、これはその後、別の勢力によって一時的に復興された、同じ名前の別の国になる。"},
+      {s:"小竹", t:"え、同じ名前なんですか、ややこしい……!"},
+      {s:"語り手", t:"その通り。だから覚えておいてほしい。時代も場所も違う。"}
+    ]},
+    {id:"p5intro_kanshin", type:"intro", name:"韓信（かんしん）", color:"#5a3a2a",
+      tags:"役割：漢の将軍／性格：型破り・大胆",
+      desc:"寡兵（かへい＝少ない兵力）を率いて、大軍相手に型破りな作戦を仕掛けることで知られる。"},
+    {id:"p5s3", type:"story", lines:[
+      {s:"韓信の部下", t:"将軍、この道は狭すぎます。もし趙軍がここで待ち伏せていたら、我らは一列に並んだまま討たれてしまいます。"},
+      {s:"韓信", t:"それは向こうも承知していよう。だからこそ、向こうがどう出るかが問題だ。"},
+      {s:"小竹", t:"不利な状況なのに、韓信さん、落ち着いてますね。"},
+      {s:"語り手", t:"不利な状況を『避けるべきもの』とだけ捉えるか、『利用できる材料』と捉えるかで、展開は大きく変わる。"}
+    ]},
+    {id:"p5intro_chinyo", type:"intro", name:"陳余（ちんよ）・李左車（りさしゃ）", color:"#4a4a2a",
+      tags:"役割：趙の将軍・参謀",
+      desc:"陳余は学問を重んじ「正々堂々と戦うべきだ」という考えに強くこだわる人物。李左車はその配下で、現実的な策を進言するが退けられてしまう。"},
+    {id:"p5s5", type:"story", lines:[
+      {s:"李左車", t:"韓信の軍は補給が届きにくい状態です。正面からぶつからず、別動隊で補給路を断てば、戦わずして敵を追い詰められましょう。"},
+      {s:"陳余", t:"なにを臆病なことを。我らは仁義の軍だ。正々堂々と正面から戦ってこそ、王者の戦い方というものだろう。これ以上は聞かぬ。"},
+      {s:"小竹", t:"九変（きゅうへん）……？"},
+      {s:"語り手", t:"状況に応じてやり方そのものを変える判断力のことだ。陳余は正しさにこだわるあまり、状況に応じた判断ができなくなっている。"}
+    ]},
+    {id:"p5q1", type:"quiz", mode:"knowledge",
+      q:"李左車が進言した策は、どのようなものだったか。",
+      options:["正面から堂々とぶつかる","補給路を断ち、戦わずに敵を追い詰める","占いで戦の吉凶を占う"],
+      correct:1, explain:"正面衝突を避け、敵の生命線である食料の補給路を断つという、謀攻篇にも通じる現実的な策だった。"
+    },
+    {id:"p5branch1", type:"quiz", mode:"badend",
+      q:"経験の浅い新兵を多く抱える韓信は、どのような陣形を敷くべきか。",
+      options:[
+        {t:"定石どおり、後方に逃げ道を残した安全な陣形にする", correct:false,
+          bad:"趙の大軍が押し寄せると、経験の浅い兵たちは早々に浮き足立ち、後方の逃げ道へなだれ込む。統制を失った軍は、あっという間に崩れてしまう。"},
+        {t:"あえて川を背にして退路を断つ陣形（背水の陣）にし、新兵たちに『戦うしかない』という覚悟を持たせる", correct:true,
+          otherwise:"もし退路を残す陣形を選んでいたら、経験の浅い兵たちは戦いの最中に浮き足立ち、総崩れになっていただろう。"}
+      ]},
+    {id:"p5end", type:"story", lines:[
+      {diagram:{kind:"barCompare", title:"新兵の覚悟（退路あり vs 退路なし）", items:[
+        {label:"退路あり", pct:30, danger:true}, {label:"退路なし", pct:90}
+      ]}},
+      {s:"韓信", t:"川を背に、陣を敷け。もう後はない――前に進むしかないと、全員に分からせるのだ。"},
+      {s:"", t:"川を背にした韓信軍に趙の大軍が襲いかかるが、退路のない兵たちは死にものぐるいで踏みとどまる。その間に別動隊が趙の本営に忍び込み、旗を漢のものに立て替えてしまう。"},
+      {s:"趙の兵士", t:"な、本営が落とされたのか!?"},
+      {s:"", t:"自分たちの拠点が落ちたと錯覚した趙の兵たちは動揺し、統制を失って崩れていく。"},
+      {s:"", t:"兵は詐りを以て立ち、利を以て動き、分合を以て変を為すものなり（へいはいつわりをもってたち、りをもってうごき、ぶんごうをもってへんをなすものなり）", quote:true},
+      {s:"語り手", t:"『戦とは、相手を欺くことによって成り立ち、利益によって動き、兵を分けたり合わせたりすることで変化を生み出すものだ』。"},
+      {s:"語り手", t:"……同じような光景を、私はこれまでにも、いくつも見てきた気がする。有能な助言が聞き入れられず、退けられてしまう場面を。"},
+      {s:"小竹", t:"語り手さん、なんだか今、意味深な感じでしたね……？"}
+    ]},
+    {id:"p5final", type:"quiz", mode:"knowledge", final:true,
+      q:"「背水の陣」とは、どのような陣形か。",
+      options:["川を背にして退路を断ち、あえて逃げられない状況を作る陣形","川の水を利用して敵を溺れさせる作戦"],
+      correct:0, explain:"退路を断つことで、経験の浅い兵に『戦うしかない』という覚悟を持たせるための陣形。"
+    },
+    {id:"p5trans", type:"story", lines:[
+      {s:"語り手", t:"フェーズ5、完。次は、地形をどう活かすかという話だ。"},
+      {s:"小竹", t:"地形……フェーズ3で少し出てきたやつですね。"},
+      {s:"語り手", t:"よく覚えていたな。今度はもっと本格的に、地形を使った戦いを見ていく。"}
+    ]}
+  ]
+},
+{
+  id:6, title:"行軍・地形・九地", sub:"定軍山の戦い",
+  glossary:{
+    characters:[
+      {name:"黄忠（こうちゅう）", brief:"劉備陣営のベテラン武将。弓の名手"},
+      {name:"法正（ほうせい）", brief:"劉備陣営の参謀。地形と敵の行動パターンを読むのが得意"},
+      {name:"夏侯淵（かこうえん）", brief:"曹操陣営の武将。機動力に優れるが、この戦いでは行動が読まれてしまう"}
+    ],
+    terms:[
+      {name:"地形（ちけい）", brief:"山・川・平地などの土地の形。うまく使うことも戦い方の一部"},
+      {name:"行軍（こうぐん）", brief:"軍を進めること。進む先の様子や敵の気配を読み取ることも含む"},
+      {name:"以逸待労（いいつたいろう）", brief:"自分たちは休んで力をたくわえ、疲れた敵を待ち構えて叩く考え方"}
+    ],
+    places:[{name:"定軍山（ていぐんざん）", brief:"この戦いの舞台となった山"}],
+    factions:[{name:"劉備陣営 vs 曹操陣営", brief:"フェーズ1〜3で見た曹操側が、今度は逆の立場で描かれる"}]
+  },
+  scenes:[
+    {id:"p6s1", type:"story", lines:[
+      {s:"語り手", t:"フェーズ6は、また新しい国・新しい人物だ。ただし今回は少し面白いことがある。"},
+      {s:"小竹", t:"何ですか？"},
+      {s:"語り手", t:"フェーズ1〜3で見た曹操陣営の武将が、今度は『攻められる側』として出てくる。同じ勢力でも、立場が変われば見え方も変わる、というのを感じてほしい。"}
+    ]},
+    {id:"p6intro_housei", type:"intro", name:"法正（ほうせい）", color:"#3a5a2a",
+      tags:"役割：劉備陣営の参謀／性格：観察力に優れる",
+      desc:"地形を読み、敵の行動パターンを観察するのが得意。"},
+    {id:"p6s3", type:"story", lines:[
+      {diagram:{kind:"mountain", topLabel:"高所：見晴らし良好・体力を使わず攻められる", bottomLabel:"低所：視界が悪く、攻め上るのに体力を消耗する"}},
+      {s:"法正", t:"黄忠殿、この山の高いところを、我らが先に押さえてしまいましょう。"},
+      {s:"語り手", t:"孫子はこう言っている。"},
+      {s:"", t:"夫れ地形は兵の助けなり、敵を料り勝を制するに、険阨遠近を計るは上将の道なり（それちけいはへいのたすけなり、てきをはかりかつをせいするに、けんあくえんきんをはかるはじょうしょうのみちなり）", quote:true},
+      {s:"語り手", t:"『地形というものは、軍にとっての助けである。敵の様子を見極め、勝ちを決めるために、地形の険しさや距離をしっかり計算することこそ、優れた指揮官のやるべきことだ』という意味だ。"}
+    ]},
+    {id:"p6branch1", type:"quiz", mode:"badend",
+      q:"山への進軍中、敵の一部が動き出したとの知らせが入った。ここでどうすべきか。",
+      options:[
+        {t:"敵の動きが見えた今、すぐに攻めかかるべきだ", correct:false,
+          bad:"高地を確保する前に攻めかかった結果、逆に高い場所を敵に取られてしまう。低い位置から見上げる形になった味方は、思うように力を発揮できず、じりじりと押し返されてしまう。"},
+        {t:"予定どおり、まず高地を確保することを優先する", correct:true,
+          otherwise:"もしすぐに攻めかかっていたら、逆に高地を敵に取られ、不利な立場に立たされていただろう。"}
+      ]},
+    {id:"p6intro_koutyu", type:"intro", name:"黄忠（こうちゅう）・夏侯淵（かこうえん）", color:"#5a2a3a",
+      tags:"役割：劉備陣営・曹操陣営の武将",
+      desc:"黄忠は歳を重ねたベテランだが、弓の腕と落ち着いた判断力に優れる。夏侯淵は機動力を活かした戦い方を得意とするが、この戦いでは自ら陣地の修復に出向くなど、行動が少々読まれやすくなっていた。"},
+    {id:"p6s6", type:"story", lines:[
+      {s:"法正", t:"夏侯淵殿は、毎日ほぼ同じ時刻に、自ら柵の修復に出てこられる。しかも、決まって護衛は少数のみ。"},
+      {s:"黄忠", t:"毎日同じ行動を繰り返しているというわけか。"},
+      {s:"法正", t:"几帳面な人ほど、行動が読みやすくなるものです。"}
+    ]},
+    {id:"p6q1", type:"quiz", mode:"knowledge",
+      q:"法正が見抜いた夏侯淵の「隙」とは、どのようなものだったか。",
+      options:["毎日ほぼ同じ時刻・同じ行動パターンで、護衛も少ない状態で行動していたこと","食料が不足していたこと","兵の数が少なかったこと"],
+      correct:0, explain:"几帳面に同じ時間・同じやり方を繰り返す習慣そのものが、相手にとっては予測しやすい隙になる。"
+    },
+    {id:"p6end", type:"story", lines:[
+      {s:"法正", t:"今です、黄忠殿。高いところから、休んだ状態の我らが、動き回って疲れている敵を討つ。"},
+      {s:"", t:"黄忠の号令とともに、高地の兵が一気に駆け下りる。不意を突かれた夏侯淵の部隊は体勢を立て直す間もなく崩れ、夏侯淵自身も討ち取られてしまう。"},
+      {s:"語り手", t:"高い場所を先に確保し、休養を十分に取った状態で、疲れて油断した敵を待ち構えて叩く。これを『以逸待労』という。"},
+      {s:"語り手", t:"……几帳面さや、習慣というものは、時に人の命取りになる。これまでの戦いでも、そうだった。私は、そのことを何度も、繰り返し見てきたように思う。"}
+    ]},
+    {id:"p6final", type:"quiz", mode:"knowledge", final:true,
+      q:"「以逸待労」の意味として正しいものはどれか。",
+      options:["自分たちは休んで力をたくわえ、疲れた敵を待ち構えて叩く","とにかく速く敵地に攻め込む"],
+      correct:0, explain:"地形の有利と、休養による体力の差を組み合わせて決め手にする考え方。"
+    },
+    {id:"p6trans", type:"story", lines:[
+      {s:"語り手", t:"フェーズ6、完。次はいよいよ最終フェーズだ。"},
+      {s:"小竹", t:"最終……! 何か特別なことがあるんですか？"},
+      {s:"語り手", t:"ああ。これまでずっと気になっていただろう、私自身のことについても、最後に話そうと思う。"}
+    ]}
+  ]
+},
+{
+  id:7, title:"火攻・用間", sub:"赤壁の戦い（最終フェーズ）",
+  glossary:{
+    characters:[
+      {name:"周瑜（しゅうゆ）", brief:"呉の将軍。火攻めを立案"},
+      {name:"黄蓋（こうがい）", brief:"呉の武将。苦肉の計を申し出る"},
+      {name:"龐統・諸葛亮", brief:"劉備陣営の参謀。曹操側への工作にかかわる（演義色が強い部分）"}
+    ],
+    terms:[
+      {name:"用間（ようかん）", brief:"スパイ（間者）を使った情報戦"},
+      {name:"苦肉の計（くにくのけい）", brief:"自分の身をわざと傷つけてまで敵をだます策"},
+      {name:"火攻（かこう）", brief:"火を使った攻撃。風向きや乾燥具合などの条件が必要"}
+    ],
+    places:[{name:"赤壁（せきへき）", brief:"長江のほとりで行われたこの戦いの舞台"}],
+    factions:[{name:"曹操軍 vs 呉・劉備連合軍", brief:"数十万と号する大軍だが慢心が見え始めている曹操軍と、情報戦と地の利で対抗する連合軍"}]
+  },
+  scenes:[
+    {id:"p7s0", type:"story", lines:[
+      {s:"語り手", t:"先に言っておく。これから見る赤壁の戦いは正史にも記録がある実在の戦いだが、これから描く『苦肉の計』などの細かい部分は、のちの時代の物語（三国志演義）によって大きく脚色されている。史実かどうかの厳密な線引きよりも、兵法の本質が伝わることを優先して見ていこう。"}
+    ]},
+    {id:"p7intro_shuyu", type:"intro", name:"周瑜（しゅうゆ）", color:"#2a3a5a",
+      tags:"役割：呉の将軍／性格：策略家",
+      desc:"数において圧倒的に劣る中、火攻めという策で活路を見出そうとする。"},
+    {id:"p7s3", type:"story", lines:[
+      {s:"武将", t:"数十万との噂もございます。正面からぶつかっては、勝ち目はございません。"},
+      {s:"周瑜", t:"正面から、とは言っていない。あの大軍、船を数多く並べて対岸に停泊させている。もし、あれに火をかけられれば……"},
+      {s:"小竹", t:"火攻め……！ でも、火をつけるだけでいいんですか？"},
+      {s:"語り手", t:"そう単純でもない。孫子はこう注意している。『火を発するに時あり』――火を起こすタイミングというものがある、と。"}
+    ]},
+    {id:"p7q1", type:"quiz", mode:"knowledge",
+      q:"火攻めを成功させるために欠かせない条件は何か。",
+      options:["風向きや空気の乾燥具合など、条件がそろうタイミングを選ぶこと","とにかく兵の数を増やすこと","夜になるのを待つことだけ"],
+      correct:0, explain:"火攻めは、風向きや乾燥具合といった自然条件がそろわなければ、味方にまで火が燃え広がる危険がある。"
+    },
+    {id:"p7intro_kougai", type:"intro", name:"黄蓋（こうがい）", color:"#5a3a2a",
+      tags:"役割：呉の武将／性格：忠義に厚い",
+      desc:"あえて自分を犠牲にする策（苦肉の計）を申し出る人物。"},
+    {id:"p7s5", type:"story", lines:[
+      {s:"黄蓋", t:"私に、一つ策がございます。わざと殿に反抗し、罰として打たれた体で、曹操殿の元へ『寝返りたい』と申し出るのです。"},
+      {s:"周瑜", t:"……本当に、痛い思いをすることになるが。"},
+      {s:"黄蓋", t:"傷が本物であるほど、曹操殿も信じましょう。"},
+      {s:"小竹", t:"え、そこまでするんですか……！ 用間って、命がけなんですね。"},
+      {s:"", t:"先知は必ず人に取って敵の情を知る者なり（せんちはかならずひとにとっててきのじょうをしるものなり）", quote:true},
+      {s:"語り手", t:"『戦の前に必要な情報は、占いや偶然からではなく、必ず人を通じて得られるものだ』。黄蓋の策は、自分自身を『人』として使い、敵の判断そのものを操ろうとするものだった。"},
+      {s:"曹操", t:"（黄蓋からの投降の申し出を聞いて）打たれてまで寝返るというなら、本物であろう。"},
+      {s:"語り手", t:"曹操ほどの人物でも、都合のいい話は信じたくなってしまう。これはフェーズ2で見た范雎の策と、同じ仕組みだ。"}
+    ]},
+    {id:"p7branch1", type:"quiz", mode:"badend",
+      q:"火を積んだ船を近づける準備は整ったが、風向きが定まらない。どうすべきか。",
+      options:[
+        {t:"好機を逃さぬよう、風向きが変わる前にすぐ仕掛ける", correct:false,
+          bad:"風向きが定まらないまま火を放った結果、火はこちらの船にまで燃え広がってしまう。せっかくの策は、味方の損害だけを増やして終わる。"},
+        {t:"風向きが変わり、こちらから対岸へ向けて吹く瞬間を待つ", correct:true,
+          otherwise:"もしすぐに仕掛けていたら、火はこちらの船にまで燃え広がり、味方の損害だけが増えていただろう。"}
+      ]},
+    {id:"p7end", type:"story", lines:[
+      {diagram:{kind:"windShift", note:"風向きが変わり、対岸へ吹き始める"}},
+      {s:"周瑜", t:"もう少しだ。風が変わる、その瞬間を待て。"},
+      {s:"", t:"風がこちらから対岸へと吹き始めた、まさにその瞬間、黄蓋の船団が火を放ちながら曹操軍の船団へと突っ込んでいく。連なっていた船は次々と燃え広がり、対岸は炎に包まれる。大軍を誇っていた曹操軍は、突然の炎と混乱の中で統制を失い、総崩れとなって北へ退いていった。"},
+      {s:"", t:"主は怒りを以て師を興すべからず、将は慍りを以て戦を致すべからず（しゅはいかりをもってしをおこすべからず、しょうはいきどおりをもってたたかいをいたすべからず）", quote:true},
+      {s:"語り手", t:"『君主は怒りにまかせて軍を起こしてはならないし、将軍も感情のままに戦いを仕掛けてはならない』。曹操がこの戦いで見せた慢心も、突き詰めれば冷静さを欠いた判断の一つだったのかもしれない。"}
+    ]},
+    {id:"p7ending", type:"story", lines:[
+      {s:"語り手", t:"……ここまで、私は名乗らずにいた。だが、最後にだけ、話しておこうと思う。"},
+      {s:"小竹", t:"わたしも、実はずっと気になってました……！"},
+      {s:"語り手", t:"孫子は、用間篇の中で、こう記している。"},
+      {s:"", t:"五間俱に起つて其の道を知る莫し、是れを神紀と謂ふ、人君の宝なり（ごかんともにおこってそのみちをしるなし、これをしんきといふ、じんくんのたからなり）", quote:true},
+      {s:"語り手", t:"『五種類の間者が同時に働いても、そのやり方の全貌は誰にも分からない。これを《神紀》――人知を超えた秘密の仕組みと呼び、君主にとっての宝とする』という意味だ。"},
+      {s:"語り手", t:"私は、その中の一つ――『生間（せいかん）』と呼ばれる者だ。表舞台には立たず、時代の陰から、それぞれの戦いを見届け、そこにある知恵を、しかるべき時に、しかるべき相手に伝える。それが私の役目だ。"},
+      {s:"語り手", t:"官渡で、長平で、烏巣で、淝水で、井陘で、定軍山で――私はずっと、同じ過ちと、同じ知恵が、形を変えて繰り返されるのを見てきた。そして今、それをあなたと、小竹に伝え終えた。"},
+      {s:"小竹", t:"そうだったんですね……! なんだか、感慨深いです。"},
+      {s:"語り手", t:"これから先、あなたがどこかで判断を迫られる時――この物語で見た七つの戦いのどれかが、きっと役に立つはずだ。"}
+    ]},
+    {id:"p7final", type:"quiz", mode:"knowledge", final:true,
+      q:"語り手の正体は、用間篇に出てくる何という存在だったか。",
+      options:["生間","死間","反間"],
+      correct:0, explain:"生間は、敵地に潜入し、生きて戻って報告する間者。語り手はこの立場から歴史を見届けてきた。"
+    }
+  ]
+}
+];
+/* ========================= エンジン本体 ========================= */
+const stage = document.getElementById('stage');
+const stageInner = document.getElementById('stageInner');
+const phaseTitle = document.getElementById('phaseTitle');
+let curPhase = 0, curScene = 0;
+let readScenes = JSON.parse(localStorage.getItem('sunzi_read_scenes') || '[]');
+let titleShown = {};
+
+function saveProgress(){
+  localStorage.setItem('sunzi_progress', JSON.stringify({p:curPhase, s:curScene}));
+  localStorage.setItem('sunzi_read_scenes', JSON.stringify(readScenes));
+}
+function markRead(id){ if(!readScenes.includes(id)) readScenes.push(id); }
+
+function startGame(resume){
+  document.getElementById('title-screen').style.display = 'none';
+  ensureAudio();
+  if(resume){
+    const saved = JSON.parse(localStorage.getItem('sunzi_progress') || 'null');
+    if(saved){ curPhase = saved.p; curScene = saved.s; }
+  } else {
+    curPhase = 0; curScene = 0; readScenes = []; titleShown = {};
+    localStorage.removeItem('sunzi_read_scenes');
+  }
+  applyPhaseAmbience();
+  maybeShowTitleCard();
+}
+
+function applyPhaseAmbience(){
+  const phase = PHASES[curPhase];
+  setBackground(PHASE_BG[phase.id]);
+  setBgm(phase.bgm || DEFAULT_BGM);
+}
+
+function maybeShowTitleCard(){
+  const phase = PHASES[curPhase];
+  if(curScene===0 && !titleShown[phase.id]){
+    titleShown[phase.id] = true;
+    showTitleCard(phase);
+  } else {
+    renderScene();
+  }
+}
+
+function showTitleCard(phase){
+  stageInner.innerHTML = '';
+  clearSprite();
+  const tc = document.createElement('div'); tc.className='titlecard';
+  const bgKey = PHASE_BG[phase.id];
+  if(bgKey){ tc.style.backgroundImage = 'url("'+bgImgPath(bgKey)+'")'; }
+  tc.innerHTML += '<div class="tc-dim"></div><div class="tc-content"><div class="tc-text">フェーズ'+phase.id+'　'+phase.title+'</div>'+
+    '<div class="tc-sub">'+phase.sub+'</div></div>';
+  tc.onclick = ()=>{ tc.remove(); renderScene(); };
+  stage.appendChild(tc);
+}
+
+function renderScene(){
+  stage.classList.remove('badend');
+  const phase = PHASES[curPhase];
+  phaseTitle.textContent = "フェーズ" + phase.id + "｜" + phase.title;
+  applyPhaseAmbience();
+  const scene = phase.scenes[curScene];
+  if(!scene){ nextPhase(); return; }
+  if(scene.type!=='tutorial') markRead(scene.id);
+  saveProgress();
+  stageInner.innerHTML = "";
+  const oldTC = stage.querySelector('.titlecard'); if(oldTC) oldTC.remove();
+
+  if(scene.type === "story"){ clearSprite(); renderStory(scene); }
+  else if(scene.type === "quiz"){ renderQuiz(scene); }
+  else if(scene.type === "intro"){ clearSprite(); renderIntro(scene); }
+  else if(scene.type === "tutorial"){ clearSprite(); renderTutorial(scene, 0); }
+  stage.scrollTop = stage.scrollHeight;
+}
+
+function renderStory(scene){
+  scene.lines.forEach(l=>{
+    if(l.diagram){ renderDiagram(l.diagram, stageInner); return; }
+    if(l.s) setSprite(l.s);
+    const div = document.createElement('div');
+    const isChiku = l.s === '小竹';
+    div.className = 'line' + (l.quote ? ' quote' : (l.s === '語り手' ? ' narrator' : (isChiku ? ' chiku' : '')));
+    if(l.s && !l.quote){
+      const sp = document.createElement('span');
+      sp.className = 'speaker'; sp.textContent = l.s;
+      div.appendChild(sp);
+    }
+    const tx = document.createElement('div'); tx.textContent = l.t;
+    div.appendChild(tx);
+    stageInner.appendChild(div);
+  });
+  const wait = document.createElement('span'); wait.className='wait-indicator'; wait.textContent='▼';
+  const btn = document.createElement('button');
+  btn.id = 'nextBtn'; btn.textContent = '次へ '; btn.appendChild(wait);
+  btn.onclick = ()=>{ curScene++; maybeShowTitleCard(); };
+  stageInner.appendChild(btn);
+  stage.scrollTop = stage.scrollHeight;
+}
+
+function renderIntro(scene){
+  const card = document.createElement('div'); card.className='introcard';
+  const key = scene.imgKey;
+  if(key){
+    const testImg = new Image();
+    testImg.onload = ()=>{
+      const im = document.createElement('img'); im.className='portrait-img'; im.src = charImgPath(key);
+      card.insertBefore(im, card.firstChild);
+    };
+    testImg.onerror = ()=>{ insertPlaceholderPortrait(card, scene); };
+    testImg.src = charImgPath(key);
+  } else {
+    insertPlaceholderPortrait(card, scene);
+  }
+  const name = document.createElement('div'); name.className='name'; name.textContent = scene.name;
+  const tags = document.createElement('div'); tags.className='tags'; tags.textContent = scene.tags || '';
+  const desc = document.createElement('div'); desc.className='desc'; desc.textContent = scene.desc;
+  card.appendChild(name); card.appendChild(tags); card.appendChild(desc);
+  stageInner.appendChild(card);
+  const wait = document.createElement('span'); wait.className='wait-indicator'; wait.textContent='▼';
+  const btn = document.createElement('button');
+  btn.id = 'nextBtn'; btn.textContent = '物語に戻る '; btn.appendChild(wait);
+  btn.onclick = ()=>{ curScene++; renderScene(); };
+  stageInner.appendChild(btn);
+  stage.scrollTop = stage.scrollHeight;
+}
+function insertPlaceholderPortrait(card, scene){
+  const portrait = document.createElement('div'); portrait.className='portrait';
+  portrait.style.background = scene.color || '#555';
+  portrait.textContent = scene.name.charAt(0);
+  card.insertBefore(portrait, card.firstChild);
+}
+
+function renderTutorial(scene, stepIdx){
+  stageInner.innerHTML = '';
+  const step = scene.steps[stepIdx];
+  const div = document.createElement('div');
+  div.className = 'line chiku';
+  const sp = document.createElement('span'); sp.className='speaker'; sp.textContent = step.speaker || '小竹';
+  div.appendChild(sp);
+  const tx = document.createElement('div'); tx.textContent = step.text;
+  div.appendChild(tx);
+  stageInner.appendChild(div);
+
+  document.getElementById('btnGlossary').classList.remove('tutorial-highlight');
+  document.getElementById('btnScenes').classList.remove('tutorial-highlight');
+
+  if(step.highlight){
+    document.getElementById(step.highlight==='glossary'?'btnGlossary':'btnScenes').classList.add('tutorial-highlight');
+    const hint = document.createElement('div'); hint.className='line system';
+    hint.textContent = '（上のボタンをタップしてください）';
+    stageInner.appendChild(hint);
+    window._tutorialWaiting = {phaseScene:scene, stepIdx};
+  } else {
+    const wait = document.createElement('span'); wait.className='wait-indicator'; wait.textContent='▼';
+    const btn = document.createElement('button');
+    btn.id='nextBtn'; btn.textContent='次へ '; btn.appendChild(wait);
+    btn.onclick = ()=>{
+      if(stepIdx+1 < scene.steps.length){ renderTutorial(scene, stepIdx+1); }
+      else { curScene++; renderScene(); }
+    };
+    stageInner.appendChild(btn);
+  }
+  stage.scrollTop = stage.scrollHeight;
+}
+
+function renderQuiz(scene){
+  const q = document.createElement('div');
+  q.className = 'line system';
+  q.textContent = (scene.final ? "【まとめクイズ】" : "【問い】") + " " + scene.q;
+  stageInner.appendChild(q);
+  const choices = document.createElement('div');
+  choices.id = 'choices';
+  scene._attempted = scene._attempted || 0;
+  const opts = scene.mode === 'badend' ? scene.options : scene.options.map((t,i)=>({t:t, correct: i===scene.correct}));
+  opts.forEach((opt)=>{
+    const b = document.createElement('button');
+    b.textContent = opt.t;
+    b.onclick = ()=> answerQuiz(scene, opt);
+    choices.appendChild(b);
+  });
+  stageInner.appendChild(choices);
+  stage.scrollTop = stage.scrollHeight;
+}
+
+function answerQuiz(scene, opt){
+  scene._attempted = (scene._attempted||0) + 1;
+  document.getElementById('choices').remove();
+  if(opt.correct){
+    if(scene.mode==='badend' && scene._attempted===1 && opt.otherwise){
+      const ow = document.createElement('div'); ow.className='line narrator';
+      const sp=document.createElement('span'); sp.className='speaker'; sp.textContent='語り手';
+      ow.appendChild(sp);
+      const tx=document.createElement('div'); tx.textContent=opt.otherwise; ow.appendChild(tx);
+      stageInner.appendChild(ow);
+    } else {
+      const ok = document.createElement('div'); ok.className = 'line system'; ok.textContent = '正解。';
+      stageInner.appendChild(ok);
+    }
+    const wait=document.createElement('span'); wait.className='wait-indicator'; wait.textContent='▼';
+    const btn = document.createElement('button');
+    btn.id='nextBtn'; btn.textContent='次へ '; btn.appendChild(wait);
+    btn.onclick = ()=>{ curScene++; renderScene(); };
+    stageInner.appendChild(btn);
+  } else {
+    if(scene.mode === 'badend'){
+      stage.classList.add('badend');
+      const bad = document.createElement('div'); bad.className = 'line';
+      bad.textContent = opt.bad || '判断を誤った。もう一度考えてみよう。';
+      stageInner.appendChild(bad);
+    } else {
+      const ex = document.createElement('div'); ex.id = 'explain'; ex.textContent = scene.explain || '';
+      stageInner.appendChild(ex);
+    }
+    const retryBtn = document.createElement('button');
+    retryBtn.id = 'nextBtn'; retryBtn.textContent = 'もう一度考える';
+    retryBtn.onclick = ()=>{ stageInner.innerHTML=''; stage.classList.remove('badend'); renderQuiz(scene); };
+    stageInner.appendChild(retryBtn);
+  }
+  stage.scrollTop = stage.scrollHeight;
+}
+
+function nextPhase(){
+  curPhase++; curScene = 0;
+  if(curPhase >= PHASES.length){
+    stageInner.innerHTML = '<div class="line narrator">全フェーズ、完走おめでとう。用語解説パネルから、これまでの人物・用語をいつでも振り返ることができる。</div>';
+    saveProgress();
+    return;
+  }
+  saveProgress();
+  maybeShowTitleCard();
+}
+
+/* ========================= 用語解説パネル ========================= */
+function openPanel(tab){
+  if(window._tutorialWaiting){
+    const w = window._tutorialWaiting;
+    const expected = w.phaseScene.steps[w.stepIdx].highlight;
+    if((tab==='glossary' && expected==='glossary') || (tab==='scenes' && expected==='scenes')){
+      window._tutorialWaiting = null;
+      document.getElementById('btnGlossary').classList.remove('tutorial-highlight');
+      document.getElementById('btnScenes').classList.remove('tutorial-highlight');
+      document.getElementById('panel-overlay').classList.add('show');
+      renderPanel(tab);
+      window._tutorialReturnStep = {phaseScene:w.phaseScene, stepIdx:w.stepIdx};
+      return;
+    }
+  }
+  document.getElementById('panel-overlay').classList.add('show');
+  renderPanel(tab);
+}
+function closePanel(){
+  document.getElementById('panel-overlay').classList.remove('show');
+  if(window._tutorialReturnStep){
+    const r = window._tutorialReturnStep; window._tutorialReturnStep = null;
+    renderTutorial(r.phaseScene, r.stepIdx+1);
+  }
+}
+
+function renderPanel(tab){
+  const inner = document.getElementById('panel-inner');
+  inner.innerHTML = '';
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'closeBtn'; closeBtn.textContent = '閉じる';
+  closeBtn.onclick = closePanel;
+  inner.appendChild(closeBtn);
+  const h2 = document.createElement('h2');
+  h2.textContent = tab === 'glossary' ? '用語解説' : '既読シーン一覧';
+  inner.appendChild(h2);
+  if(tab === 'glossary'){ renderGlossary(inner); } else { renderSceneList(inner); }
+}
+
+let glossarySubtab = 'characters';
+function renderGlossary(inner){
+  const tabbar = document.createElement('div'); tabbar.className = 'tabbar';
+  const tabs = [['characters','人物'],['terms','用語'],['places','地名'],['factions','勢力']];
+  tabs.forEach(([key,label])=>{
+    const b = document.createElement('button');
+    b.textContent = label;
+    if(glossarySubtab===key) b.classList.add('active');
+    b.onclick = ()=>{ glossarySubtab = key; renderPanel('glossary'); };
+    tabbar.appendChild(b);
+  });
+  inner.appendChild(tabbar);
+  const maxPhase = Math.max(curPhase, 0);
+  for(let i=0;i<=maxPhase && i<PHASES.length;i++){
+    const g = PHASES[i].glossary[glossarySubtab] || [];
+    if(g.length===0) continue;
+    const label = document.createElement('div');
+    label.style.color = '#888'; label.style.fontSize='0.75rem'; label.style.margin='10px 0 4px';
+    label.textContent = 'フェーズ' + PHASES[i].id;
+    inner.appendChild(label);
+    g.forEach(item=>{
+      const e = document.createElement('div'); e.className = 'entry';
+      e.innerHTML = '<b>' + item.name + '</b><div class="brief">' + item.brief + '</div>';
+      e.onclick = ()=>{
+        let d = e.querySelector('.entry-detail');
+        if(d){ d.remove(); return; }
+        d = document.createElement('div'); d.className='entry-detail';
+        d.textContent = item.detail || item.brief;
+        e.appendChild(d);
+      };
+      inner.appendChild(e);
+    });
+  }
+}
+
+function renderSceneList(inner){
+  PHASES.forEach((phase, pi)=>{
+    const label = document.createElement('div');
+    label.style.color = '#888'; label.style.fontSize='0.75rem'; label.style.margin='10px 0 4px';
+    label.textContent = 'フェーズ' + phase.id + '｜' + phase.title;
+    inner.appendChild(label);
+    phase.scenes.filter(s=>s.type==='story'||s.type==='intro').forEach(scene=>{
+      const isRead = readScenes.includes(scene.id);
+      const item = document.createElement('div');
+      item.className = 'sceneItem ' + (isRead ? 'read' : 'unread');
+      let previewText = scene.type==='intro' ? ('キャラ紹介：'+scene.name) : (scene.lines.find(l=>l.t) ? scene.lines.find(l=>l.t).t.slice(0,26) : '');
+      item.textContent = previewText + (isRead ? '' : '（未読）');
+      if(isRead){
+        item.onclick = ()=>{
+          closePanel();
+          curPhase = pi; curScene = phase.scenes.indexOf(scene);
+          renderScene();
+        };
+      }
+      inner.appendChild(item);
+    });
+  });
+}
+</script>
+</body>
+</html>
