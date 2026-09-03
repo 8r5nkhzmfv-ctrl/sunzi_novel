@@ -1021,12 +1021,17 @@ function showTitleCard(phase){
   stageInner.innerHTML = '';
   clearSprite();
   const tc = document.createElement('div'); tc.className='titlecard';
-  const bgKey = PHASE_BG[phase.id];
-  if(bgKey){ tc.style.backgroundImage = 'url("'+bgImgPath(bgKey)+'")'; }
-  tc.innerHTML += '<div class="tc-dim"></div><div class="tc-content"><div class="tc-text">フェーズ'+phase.id+'　'+phase.title+'</div>'+
+  tc.innerHTML = '<div class="tc-dim"></div><div class="tc-content"><div class="tc-text">フェーズ'+phase.id+'　'+phase.title+'</div>'+
     '<div class="tc-sub">'+phase.sub+'</div></div>';
   tc.onclick = ()=>{ tc.remove(); renderScene(); };
   stage.appendChild(tc);
+  const bgKey = PHASE_BG[phase.id];
+  if(bgKey){
+    tryLoadWithExts(bgImgBase(bgKey), BG_EXTS,
+      (path)=>{ tc.style.backgroundImage = 'url("'+path+'")'; },
+      ()=>{ /* 画像が無ければ無地のまま（#bgLayerの色調のみで表示） */ }
+    );
+  }
 }
 
 function renderScene(){
