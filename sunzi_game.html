@@ -177,26 +177,68 @@ if(window.visualViewport){ window.visualViewport.addEventListener('resize', setV
 /* ========================= アセット解決 ========================= */
 // 実ファイルが無い場合は自動でプレースホルダにフォールバックする
 const ASSET_BASE = 'assets/';
-function charImgPath(key){ return ASSET_BASE + 'characters/' + key + '.jpeg'; }
-function bgImgPath(key){ return ASSET_BASE + 'backgrounds/' + key + '.jpeg'; }
+const CHAR_EXTS = ['png','jpg','jpeg'];
+const BG_EXTS = ['jpg','jpeg','png'];
+function tryLoadWithExts(basePath, exts, onFound, onFail, idx){
+  idx = idx || 0;
+  if(idx >= exts.length){ onFail(); return; }
+  const path = basePath + '.' + exts[idx];
+  const img = new Image();
+  img.onload = ()=> onFound(path);
+  img.onerror = ()=> tryLoadWithExts(basePath, exts, onFound, onFail, idx+1);
+  img.src = path;
+}
+function charImgBase(key){ return ASSET_BASE + 'characters/' + key; }
+function bgImgBase(key){ return ASSET_BASE + 'backgrounds/' + key; }
 function bgmPath(key){ return ASSET_BASE + 'audio/' + key + '.mp3'; }
 
-// 話者名 → 立ち絵アセットキーの対応表（デモ：曹操＝固有サンプル、その他モブ役＝汎用サンプル）
+// 話者名 → 立ち絵アセットキーの対応表（表情差分がある人物は {default, <感情名>} の形）
 const SPRITE_MAP = {
-  "曹操": "sample_unique",
-  "伝令": "sample_generic",
-  "武将": "sample_generic",
-  "役人": "sample_generic",
-  "若い部下": "sample_generic",
-  "武将の一人": "sample_generic"
+  "小竹":   {default:"C01", "驚き":"C01b"},
+  "語り手": {default:"C02"},
+  "曹操":   {default:"C03", "緊迫":"C03b"},
+  "荀彧":   {default:"C04"},
+  "郭嘉":   {default:"C05"},
+  "廉頗":   {default:"C06", "気迫":"C06b"},
+  "韓信":   {default:"C07", "覚悟":"C07b"},
+  "黄忠":   {default:"C08", "決断":"C08b"},
+  "謝玄":   {default:"C09"},
+  "周瑜":   {default:"C10"},
+  "苻堅":   {default:"C11"},
+  "黄蓋":   {default:"C12", "傷ついた姿":"C12b"},
+  // 汎用アーキタイプへの割り当て
+  "藺相如": {default:"C_A"}, "范雎": {default:"C_A"}, "李左車": {default:"C_A"},
+  "法正": {default:"C_A"}, "謝安": {default:"C_A"},
+  "趙括": {default:"C_B"}, "許攸": {default:"C_B"},
+  "袁紹": {default:"C_C"}, "趙王": {default:"C_C"}, "陳余": {default:"C_C"},
+  "白起": {default:"C_D"}, "淳于瓊": {default:"C_D"}, "夏侯淵": {default:"C_D"}, "朱序": {default:"C_D"},
+  "伝令": {default:"C_E"}, "武将": {default:"C_E"}, "武将の一人": {default:"C_E"},
+  "役人": {default:"C_E"}, "若い部下": {default:"C_E"}
 };
-// フェーズ → 背景アセットキーの対応表（デモ：フェーズ1のみサンプル背景を使用）
-const PHASE_BG = { 1: "sample_bg" };
+// 完全一致しない話者名（「韓信の部下」等）のためのキーワード救済ルール
+const SPRITE_FALLBACK_RULES = [
+  [/部下|兵士|伝令|軍|士卒/, "C_E"],
+  [/参謀|重臣/, "C_A"],
+  [/武将|将軍/, "C_D"],
+  [/王|殿|皇帝/, "C_C"]
+];
+// フェーズ → 背景アセットキーの対応表（タイトルカード用）
+const PHASE_BG = { 1:"BG01", 2:"BG02", 3:"BG03", 4:"BG04", 5:"BG05", 6:"BG06", 7:"BG07" };
 const DEFAULT_BGM = "bgm_usual";
 
 function normalizeSpeaker(name){
   if(!name) return '';
   return name.split('（')[0].split('＝')[0];
+}
+function resolveSpriteKey(speakerRaw, emo){
+  const name = normalizeSpeaker(speakerRaw);
+  let entry = SPRITE_MAP[name];
+  if(!entry){
+    for(const [re,key] of SPRITE_FALLBACK_RULES){ if(re.test(name)){ entry = {default:key}; break; } }
+  }
+  if(!entry) return null;
+  if(emo && entry[emo]) return entry[emo];
+  return entry.default;
 }
 
 /* ========================= 簡易サウンド ========================= */
@@ -235,21 +277,18 @@ function toggleBgm(){
 function setBackground(key){
   const layer = document.getElementById('bgLayer');
   if(!key){ layer.classList.add('none'); return; }
-  const img = new Image();
-  img.onload = ()=>{ layer.style.backgroundImage = 'url("'+bgImgPath(key)+'")'; layer.classList.remove('none'); };
-  img.onerror = ()=>{ layer.classList.add('none'); };
-  img.src = bgImgPath(key);
+  tryLoadWithExts(bgImgBase(key), BG_EXTS,
+    (path)=>{ layer.style.backgroundImage = 'url("'+path+'")'; layer.classList.remove('none'); },
+    ()=>{ layer.classList.add('none'); }
+  );
 }
-function setSprite(speakerRaw){
-  const layer = document.getElementById('spriteLayer');
-  const name = normalizeSpeaker(speakerRaw);
-  const key = SPRITE_MAP[name];
+function setSprite(speakerRaw, emo){
+  const key = resolveSpriteKey(speakerRaw, emo);
   if(!key){ return; } // マッピングが無い話者ではスプライトを変更しない（直前の表示を維持）
-  layer.innerHTML = '';
-  const img = new Image();
-  img.onload = ()=>{ layer.innerHTML=''; const im=document.createElement('img'); im.src=charImgPath(key); layer.appendChild(im); };
-  img.onerror = ()=>{ /* 画像が無ければ何も表示しない（プレースホルダはキャラ紹介カード側で対応） */ };
-  img.src = charImgPath(key);
+  tryLoadWithExts(charImgBase(key), CHAR_EXTS,
+    (path)=>{ const layer=document.getElementById('spriteLayer'); layer.innerHTML=''; const im=document.createElement('img'); im.src=path; layer.appendChild(im); },
+    ()=>{ /* 画像が無ければ何も表示しない（プレースホルダはキャラ紹介カード側で対応） */ }
+  );
 }
 function clearSprite(){ document.getElementById('spriteLayer').innerHTML = ''; }
 
@@ -344,10 +383,10 @@ const PHASES = [
       {s:"小竹", t:"参謀……初めて聞く言葉です。えっと、軍師（ぐんし）っていうのも、似たような意味ですか？"},
       {s:"語り手", t:"その通り。呼び方が違うだけで、どちらもリーダーのそばで作戦を考える役目のことだ。"}
     ]},
-    {id:"p1intro_caocao", type:"intro", name:"曹操（そうそう）", color:"#8a2b2b", imgKey:"sample_unique",
+    {id:"p1intro_caocao", type:"intro", name:"曹操（そうそう）", color:"#8a2b2b",
       tags:"役割：主君／性格：実利主義／立場：劣勢を五事七計で覆そうとしている",
       desc:"まだこの時点では天下人ではなく、後で出てくる敵・袁紹に比べると『格下』と見られている武将。感情より損得を優先する現実主義者で、判断が速い。"},
-    {id:"p1s3", type:"story", lines:[
+    {id:"p1s3", type:"story", bg:"BG_A", lines:[
       {s:"伝令", t:"申し上げます！ 袁紹軍、十万を超える兵をもって南下を開始した模様にございます！"}
     ]},
     {id:"p1d1", type:"story", lines:[
@@ -366,7 +405,7 @@ const PHASES = [
     {id:"p1intro_junyu", type:"intro", name:"荀彧（じゅんいく）", color:"#2f4a6a",
       tags:"役割：参謀／性格：冷静・体系立てて説明する先生役",
       desc:"曹操の参謀。冷静で、物事を順序立てて説明するのが得意。この物語では「先生役」に近い立ち位置で、あなたに知識を教えてくれる。"},
-    {id:"p1s5", type:"story", lines:[
+    {id:"p1s5", type:"story", bg:"BG_A", lines:[
       {s:"荀彧", t:"勝ち負けを占うには、五つのポイントがございます。これを『五事（ごじ）』と申します。"},
       {diagram:{kind:"cardGrid", title:"五事", items:[
         {label:"道",reading:"どう"},{label:"天",reading:"てん"},{label:"地",reading:"ち"},{label:"将",reading:"しょう"},{label:"法",reading:"ほう"}
@@ -419,7 +458,7 @@ const PHASES = [
       ]},
     {id:"p1s4", type:"story", lines:[
       {s:"荀彧", t:"その通りです。数だけを見れば厳しくても、リーダーの器・将の力・ルールの整い方で我らに分があるなら、まだ十分に戦える道はございます。"},
-      {s:"曹操", t:"――それで、お前の結論は。"}
+      {s:"曹操", t:"――それで、お前の結論は。", emo:"緊迫"}
     ]},
     {id:"p1branch2", type:"quiz", mode:"badend",
       q:"最終的に、どちらの意見を伝えるか。",
@@ -472,7 +511,7 @@ const PHASES = [
     {id:"p2title", type:"story", lines:[
       {s:"語り手", t:"フェーズ2、始まりだ。"}
     ]},
-    {id:"p2s2", type:"story", lines:[
+    {id:"p2s2", type:"story", bg:"BG_A", lines:[
       {diagram:{kind:"barCompare", title:"趙の国庫（時間経過とともに減っていく）", items:[
         {label:"開戦時", pct:90}, {label:"現在", pct:25, danger:true}
       ]}},
@@ -493,14 +532,14 @@ const PHASES = [
       desc:"年配のベテランで、無理に戦わず守りに徹する「持久戦」を続けている。国内では「臆病者」と陰口を叩かれているが、実際は最も理にかなった判断をしている。"},
     {id:"p2s4", type:"story", lines:[
       {s:"若い部下", t:"将軍、なぜ攻めないのですか。国では『臆病者』とまで言われておりますぞ。"},
-      {s:"廉頗", t:"臆病、で構わん。正面からぶつかれば、こちらの被害のほうが大きい。相手が焦って動くのを待てばよい。"},
+      {s:"廉頗", t:"臆病、で構わん。正面からぶつかれば、こちらの被害のほうが大きい。相手が焦って動くのを待てばよい。", emo:"気迫"},
       {s:"小竹", t:"臆病って言われても平気なんですか……？ すごい精神力です。"},
       {s:"語り手", t:"廉頗の考えは、実は謀攻篇の教えに近い。無理に攻めて兵を失うより、守りを固めて相手を消耗させ、戦わずに済む状況を作り出そうとしている。"}
     ]},
     {id:"p2intro_hansho", type:"intro", name:"范雎（はんしょ）・白起（はくき）", color:"#2a2a3a",
       tags:"役割：秦の重臣・将軍／性格：策略家・冷徹",
       desc:"范雎は武力ではなく「策略」で敵を動かす名手。白起は勝つためには手段を選ばない冷徹な将軍。"},
-    {id:"p2s6", type:"story", lines:[
+    {id:"p2s6", type:"story", bgm:"bgm_unrest", lines:[
       {s:"范雎", t:"廉頗が動かぬ限り、我らも無理に攻められませぬ。ならば――廉頗そのものを、趙の内側から取り除いてしまえばよいのです。"},
       {s:"白起", t:"策があるのか。"},
       {s:"范雎", t:"趙の都に、うわさを流します。『秦が本当に恐れているのは廉頗ではない。もし趙括があの若さで将軍になったら、それこそ恐ろしい』とね。"},
@@ -560,7 +599,7 @@ const PHASES = [
     factions:[{name:"曹操 vs 袁紹", brief:"フェーズ1に続く対立", detail:"袁紹側の内部の不満（許攸の寝返り）が勝敗を左右する鍵になる。"}]
   },
   scenes:[
-    {id:"p3s1", type:"story", lines:[
+    {id:"p3s1", type:"story", bg:"BG_B", lines:[
       {s:"語り手", t:"フェーズ3は、フェーズ1の続きだ。曹操・荀彧・郭嘉・袁紹――みんな覚えているだろうか。"},
       {s:"小竹", t:"はい! 五事七計で頑張って戦うって決めたところですよね。"},
       {s:"語り手", t:"その通り。あれから時間が経ち、状況は変わりつつある。"},
@@ -571,7 +610,7 @@ const PHASES = [
     {id:"p3intro_kyoyu", type:"intro", name:"許攸（きょゆう）", color:"#5a5a2a",
       tags:"役割：元袁紹陣営／性格：不満を抱え離反",
       desc:"もともと袁紹の参謀の一人。意見を聞き入れてもらえず、家族まで袁紹側の別の役人ともめて捕らえられてしまったことをきっかけに、曹操側へ寝返る人物。"},
-    {id:"p3s4", type:"story", lines:[
+    {id:"p3s4", type:"story", bgm:"bgm_unrest", lines:[
       {s:"許攸", t:"曹操殿にお目通り願いたい。私は袁紹軍にいた許攸と申す者。もう、あの主君には仕えられぬ。"},
       {s:"曹操", t:"何があった。"},
       {s:"許攸", t:"私の意見は聞き入れられず、家族まで捕らえられた。ばかばかしくなり申した。その代わり――袁紹軍の食料をすべて蓄えている『烏巣』の守りが、驚くほど手薄なことをお教えしよう。"},
@@ -597,7 +636,7 @@ const PHASES = [
     {id:"p3intro_junuu", type:"intro", name:"淳于瓊（じゅんうけい）", color:"#2a4a4a",
       tags:"役割：袁紹軍の武将／性格：油断が大きい",
       desc:"食料庫「烏巣」の守りを任されているが、油断が大きい。"},
-    {id:"p3end", type:"story", lines:[
+    {id:"p3end", type:"story", bgm:"bgm_battle", lines:[
       {s:"曹操", t:"よし。今この瞬間に、すべてを懸ける。"},
       {s:"淳于瓊", t:"なに!? まさか、曹操自らが……!?"},
       {s:"", t:"炎が夜空を焦がす。食料をすべて失った袁紹軍に動揺が走り、指揮系統は乱れ、なだれを打つように崩れていく。"},
@@ -655,7 +694,7 @@ const PHASES = [
     {id:"p4intro_shujo", type:"intro", name:"朱序（しゅじょ）", color:"#4a2a5a",
       tags:"役割：前秦軍に組み込まれた元東晋の将軍／性格：心は東晋に忠実",
       desc:"以前の戦いで捕らえられ、今は前秦軍の中で働かされている。しかし心の中では、今も東晋への忠誠を捨てていない。"},
-    {id:"p4s6", type:"story", lines:[
+    {id:"p4s6", type:"story", bgm:"bgm_unrest", lines:[
       {diagram:{kind:"barCompare", title:"前秦軍の内実（見た目の量 vs 実際のまとまり）", items:[
         {label:"兵力（量）", pct:90}, {label:"まとまり", pct:20, danger:true}
       ]}},
@@ -676,7 +715,7 @@ const PHASES = [
         {t:"川を挟んで守りに徹していたほうが安全だ。危険な提案は取り下げるべきだ", correct:false,
           bad:"安全策を取り、両軍はにらみ合ったまま長期戦に入る。兵力に劣る東晋は、時間が経つほど不利になっていく。せっかくの『相手のまとまりの弱さ』を突くチャンスを、自分から手放してしまった。"}
       ]},
-    {id:"p4end", type:"story", lines:[
+    {id:"p4end", type:"story", bgm:"bgm_battle", lines:[
       {s:"苻堅", t:"なるほど、道理だ。少し下がらせよ。"},
       {s:"朱序", t:"（大声で）秦軍が敗れたぞ! 秦軍が敗れたぞ!"},
       {s:"", t:"もともとまとまりの薄かった前秦の大軍は、後退の号令と叫び声が重なりパニックに陥る。風の音、鶴の鳴き声にまで怯え、草木までもが敵兵に見えるほどの混乱が広がった――後の世に『風声鶴唳』『草木皆兵』という言葉が生まれるほどの総崩れだった。"},
@@ -758,7 +797,7 @@ const PHASES = [
       {diagram:{kind:"barCompare", title:"新兵の覚悟（退路あり vs 退路なし）", items:[
         {label:"退路あり", pct:30, danger:true}, {label:"退路なし", pct:90}
       ]}},
-      {s:"韓信", t:"川を背に、陣を敷け。もう後はない――前に進むしかないと、全員に分からせるのだ。"},
+      {s:"韓信", t:"川を背に、陣を敷け。もう後はない――前に進むしかないと、全員に分からせるのだ。", emo:"覚悟"},
       {s:"", t:"川を背にした韓信軍に趙の大軍が襲いかかるが、退路のない兵たちは死にものぐるいで踏みとどまる。その間に別動隊が趙の本営に忍び込み、旗を漢のものに立て替えてしまう。"},
       {s:"趙の兵士", t:"な、本営が落とされたのか!?"},
       {s:"", t:"自分たちの拠点が落ちたと錯覚した趙の兵たちは動揺し、統制を失って崩れていく。"},
@@ -832,8 +871,9 @@ const PHASES = [
       options:["毎日ほぼ同じ時刻・同じ行動パターンで、護衛も少ない状態で行動していたこと","食料が不足していたこと","兵の数が少なかったこと"],
       correct:0, explain:"几帳面に同じ時間・同じやり方を繰り返す習慣そのものが、相手にとっては予測しやすい隙になる。"
     },
-    {id:"p6end", type:"story", lines:[
+    {id:"p6end", type:"story", bgm:"bgm_battle", lines:[
       {s:"法正", t:"今です、黄忠殿。高いところから、休んだ状態の我らが、動き回って疲れている敵を討つ。"},
+      {s:"黄忠", t:"……ここが、勝負どころだな。", emo:"決断"},
       {s:"", t:"黄忠の号令とともに、高地の兵が一気に駆け下りる。不意を突かれた夏侯淵の部隊は体勢を立て直す間もなく崩れ、夏侯淵自身も討ち取られてしまう。"},
       {s:"語り手", t:"高い場所を先に確保し、休養を十分に取った状態で、疲れて油断した敵を待ち構えて叩く。これを『以逸待労』という。"},
       {s:"語り手", t:"……几帳面さや、習慣というものは、時に人の命取りになる。これまでの戦いでも、そうだった。私は、そのことを何度も、繰り返し見てきたように思う。"}
@@ -887,10 +927,12 @@ const PHASES = [
     {id:"p7intro_kougai", type:"intro", name:"黄蓋（こうがい）", color:"#5a3a2a",
       tags:"役割：呉の武将／性格：忠義に厚い",
       desc:"あえて自分を犠牲にする策（苦肉の計）を申し出る人物。"},
-    {id:"p7s5", type:"story", lines:[
+    {id:"p7s5", type:"story", bgm:"bgm_unrest", lines:[
       {s:"黄蓋", t:"私に、一つ策がございます。わざと殿に反抗し、罰として打たれた体で、曹操殿の元へ『寝返りたい』と申し出るのです。"},
       {s:"周瑜", t:"……本当に、痛い思いをすることになるが。"},
       {s:"黄蓋", t:"傷が本物であるほど、曹操殿も信じましょう。"},
+      {s:"", t:"数日後、鞭打たれ傷を負った黄蓋は、密かに使者を曹操の陣へ送った。"},
+      {s:"黄蓋", t:"（傷を負いながら）これで、疑いは晴れるはずだ。", emo:"傷ついた姿"},
       {s:"小竹", t:"え、そこまでするんですか……！ 用間って、命がけなんですね。"},
       {s:"", t:"先知は必ず人に取って敵の情を知る者なり（せんちはかならずひとにとっててきのじょうをしるものなり）", quote:true},
       {s:"語り手", t:"『戦の前に必要な情報は、占いや偶然からではなく、必ず人を通じて得られるものだ』。黄蓋の策は、自分自身を『人』として使い、敵の判断そのものを操ろうとするものだった。"},
@@ -905,7 +947,7 @@ const PHASES = [
         {t:"風向きが変わり、こちらから対岸へ向けて吹く瞬間を待つ", correct:true,
           otherwise:"もしすぐに仕掛けていたら、火はこちらの船にまで燃え広がり、味方の損害だけが増えていただろう。"}
       ]},
-    {id:"p7end", type:"story", lines:[
+    {id:"p7end", type:"story", bgm:"bgm_battle", lines:[
       {diagram:{kind:"windShift", note:"風向きが変わり、対岸へ吹き始める"}},
       {s:"周瑜", t:"もう少しだ。風が変わる、その瞬間を待て。"},
       {s:"", t:"風がこちらから対岸へと吹き始めた、まさにその瞬間、黄蓋の船団が火を放ちながら曹操軍の船団へと突っ込んでいく。連なっていた船は次々と燃え広がり、対岸は炎に包まれる。大軍を誇っていた曹操軍は、突然の炎と混乱の中で統制を失い、総崩れとなって北へ退いていった。"},
@@ -959,10 +1001,10 @@ function startGame(resume){
   maybeShowTitleCard();
 }
 
-function applyPhaseAmbience(){
+function applyPhaseAmbience(sceneOverrideBg, sceneOverrideBgm){
   const phase = PHASES[curPhase];
-  setBackground(PHASE_BG[phase.id]);
-  setBgm(phase.bgm || DEFAULT_BGM);
+  setBackground(sceneOverrideBg || PHASE_BG[phase.id]);
+  setBgm(sceneOverrideBgm || phase.bgm || DEFAULT_BGM);
 }
 
 function maybeShowTitleCard(){
@@ -991,9 +1033,9 @@ function renderScene(){
   stage.classList.remove('badend');
   const phase = PHASES[curPhase];
   phaseTitle.textContent = "フェーズ" + phase.id + "｜" + phase.title;
-  applyPhaseAmbience();
   const scene = phase.scenes[curScene];
   if(!scene){ nextPhase(); return; }
+  applyPhaseAmbience(scene.bg, scene.bgm);
   if(scene.type!=='tutorial') markRead(scene.id);
   saveProgress();
   stageInner.innerHTML = "";
@@ -1009,7 +1051,7 @@ function renderScene(){
 function renderStory(scene){
   scene.lines.forEach(l=>{
     if(l.diagram){ renderDiagram(l.diagram, stageInner); return; }
-    if(l.s) setSprite(l.s);
+    if(l.s) setSprite(l.s, l.emo);
     const div = document.createElement('div');
     const isChiku = l.s === '小竹';
     div.className = 'line' + (l.quote ? ' quote' : (l.s === '語り手' ? ' narrator' : (isChiku ? ' chiku' : '')));
@@ -1032,15 +1074,12 @@ function renderStory(scene){
 
 function renderIntro(scene){
   const card = document.createElement('div'); card.className='introcard';
-  const key = scene.imgKey;
+  const key = scene.imgKey || resolveSpriteKey(scene.name);
   if(key){
-    const testImg = new Image();
-    testImg.onload = ()=>{
-      const im = document.createElement('img'); im.className='portrait-img'; im.src = charImgPath(key);
-      card.insertBefore(im, card.firstChild);
-    };
-    testImg.onerror = ()=>{ insertPlaceholderPortrait(card, scene); };
-    testImg.src = charImgPath(key);
+    tryLoadWithExts(charImgBase(key), CHAR_EXTS,
+      (path)=>{ const im = document.createElement('img'); im.className='portrait-img'; im.src = path; card.insertBefore(im, card.firstChild); },
+      ()=>{ insertPlaceholderPortrait(card, scene); }
+    );
   } else {
     insertPlaceholderPortrait(card, scene);
   }
